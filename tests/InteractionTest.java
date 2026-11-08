@@ -34,12 +34,13 @@ public final class InteractionTest {
         check(TouchpadGesture.clickButton(true,590,439,602,438)==1,"point past the bottom edge is not right click");
         Mouse m=new Mouse();m.pad.down(0,10,10,0,1);m.pad.up(0,90);equal(m.buttons,"1D","1U");
         m=new Mouse();m.pad.down(0,900,10,0,2);m.pad.up(0,90);equal(m.buttons,"2D","2U");
-        m=new Mouse();m.pad.down(0,10,10,0,1);long token=m.pad.token();m.pad.hold(token,99);
-        check(m.buttons.isEmpty(),"hold must not start before 100 ms");m.pad.hold(token,100);
+        m=new Mouse();m.pad.down(0,10,10,0,1);long token=m.pad.token();m.pad.hold(token,100);
+        check(!m.dragging,"default hold does not drag at the former 100 ms threshold");m.pad.hold(token,299);
+        check(m.buttons.isEmpty(),"hold must not start before 300 ms");m.pad.hold(token,300);
         check(m.dragging,"one stationary press starts dragging");
         m.pad.update(0,50,30);m.pad.finishMove();check(m.dx==40&&m.dy==20,"drag moves pointer");
         m.pad.up(0,800);equal(m.buttons,"1D","1U");check(!m.dragging,"finger up releases drag");
-        m=new Mouse();m.pad.down(0,900,10,0,2);m.pad.hold(m.pad.token(),100);m.pad.up(0,500);
+        m=new Mouse();m.pad.down(0,900,10,0,2);m.pad.hold(m.pad.token(),300);m.pad.up(0,500);
         equal(m.buttons,"1D","1U"); // A right-zone long hold still performs a normal left drag.
         for(int delay:new int[]{50,100,150,300,450,1000}){
             m=new Mouse();m.pad.setHoldDelayMs(delay);m.pad.down(0,10,10,700,1);

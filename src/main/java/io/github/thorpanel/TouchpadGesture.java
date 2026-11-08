@@ -8,7 +8,7 @@ import java.util.Map;
 
 /** Tracks only fingers on the pad; fingers holding the separate mouse buttons are excluded. */
 final class TouchpadGesture {
-    static final int DEFAULT_HOLD_MS=100,MIN_HOLD_MS=50,MAX_HOLD_MS=1000,HOLD_STEP_MS=10;
+    static final int DEFAULT_HOLD_MS=300,MIN_HOLD_MS=50,MAX_HOLD_MS=1000,HOLD_STEP_MS=10;
     static int clampHoldMs(int value){return Math.max(MIN_HOLD_MS,Math.min(MAX_HOLD_MS,value));}
     static final float RIGHT_RADIUS=100;
     static boolean inRightCorner(float x,float y,float right,float bottom){
