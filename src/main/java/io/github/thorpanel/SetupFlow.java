@@ -59,6 +59,7 @@ final class SetupFlow {
         boolean autoConnectEnabled;
         boolean writeSecureGranted;
         boolean androidBelow11;
+        boolean developerOptionsEnabled;
         boolean shizukuRunning;
         boolean provisionIncomplete;
         boolean guideCompleted;
@@ -175,9 +176,9 @@ final class SetupFlow {
 
     private static Page connectionPage(Snapshot s) {
         if (s.authInvalid || (!s.pairedCredentials && !s.serviceReady)) {
-            // First pair, or credentials rejected: pair page once wireless is reachable or manual.
+            // Developer options already enabled: start with pairing and keep the settings action.
             if (s.pairingPort > 0 || s.manualPortMode || s.searchTimedOut || s.searchFailed
-                    || s.connectionPort > 0)
+                    || s.connectionPort > 0 || s.developerOptionsEnabled && !s.androidBelow11)
                 return Page.PAIR_CODE;
         }
         if (s.pairedCredentials && !s.authInvalid)
@@ -232,8 +233,8 @@ final class SetupFlow {
             return 1;
         if (s.device == DeviceKind.SINGLE)
             return 3;
-        // Paired and authorized: skip pair page → 4 steps; otherwise 5.
-        if (s.pairedCredentials && !s.authInvalid)
+        // An existing pair or enabled developer options needs only one connection step.
+        if (oneConnectionStep(s))
             return 4;
         return 5;
     }
@@ -243,22 +244,27 @@ final class SetupFlow {
             return 1;
         if (s.device == DeviceKind.SINGLE)
             return page == Page.DONE ? 3 : page == Page.PICK_REMOTE ? 2 : 1;
-        boolean skipPair = s.pairedCredentials && !s.authInvalid;
+        boolean oneConnection = oneConnectionStep(s);
         switch (page) {
             case ENABLE_WIRELESS:
             case RECONNECT:
                 return 1;
             case PAIR_CODE:
-                return 2;
+                return s.developerOptionsEnabled && !s.androidBelow11 ? 1 : 2;
             case PICK_IME:
-                return skipPair ? 2 : 3;
+                return oneConnection ? 2 : 3;
             case LOWER_INPUT:
-                return skipPair ? 3 : 4;
+                return oneConnection ? 3 : 4;
             case DONE:
-                return skipPair ? 4 : 5;
+                return oneConnection ? 4 : 5;
             default:
                 return 1;
         }
+    }
+
+    private static boolean oneConnectionStep(Snapshot s) {
+        return s.pairedCredentials && !s.authInvalid
+                || s.developerOptionsEnabled && !s.androidBelow11;
     }
 
     /** Whether discovery should auto-advance from enable-wireless after a port appears. */

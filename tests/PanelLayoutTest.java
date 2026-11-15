@@ -46,11 +46,29 @@ public final class PanelLayoutTest {
         add(targets, layout.pageIndicator);
         for (PanelLayout.Key key : layout.keys) add(targets, key.bounds);
         for (PanelLayout.Rect target : targets) {
-            check(target.width() >= 47.99f && target.height() >= 47.99f, "48dp target " + layout.snapshot());
+            check(target.width() >= PanelLayout.FULL_KEY_WIDTH - .01f
+                    && target.height() >= PanelLayout.FULL_KEY_HEIGHT - .01f,
+                    "minimum compact target " + layout.snapshot());
             check(target.left >= 0 && target.top >= 0 && target.right <= layout.width + .01f
                     && target.bottom <= layout.height + .01f, "target within viewport " + layout.snapshot());
             check(target.contains(target.centerX(), target.centerY()), "center hit");
             check(!target.contains(target.right, target.bottom), "exclusive right/bottom edges");
+        }
+        for (PanelLayout.Rect control : new PanelLayout.Rect[]{layout.settings, layout.exit,
+                layout.option, layout.imeButton}) {
+            if (!control.isEmpty()) check(control.height() >= PanelLayout.HEADER_TARGET - .01f,
+                    "compact toolbar height");
+        }
+        for (PanelLayout.Rect mode : layout.modes)
+            check(mode.height() >= PanelLayout.HEADER_TARGET - .01f, "mode tab height");
+        for (PanelLayout.Key key : layout.keys) {
+            if (layout.fullKeyboard) {
+                check(key.bounds.width() + .01f >= key.label.length() * layout.keyTextSp * layout.fontScale * .64f + 8,
+                        "full keyboard label fits: " + key.label);
+            } else {
+                check(key.bounds.width() >= 47.99f && key.bounds.height() >= 47.99f,
+                        "layered keyboard retains 48dp keys");
+            }
         }
         for (int i = 0; i < targets.size(); i++) {
             for (int j = i + 1; j < targets.size(); j++) {
@@ -93,7 +111,7 @@ public final class PanelLayoutTest {
                         for (int layer = 0; layer < 3; layer++) {
                             PanelLayout current = layout(width, height, scale, mode, layer, 0);
                             geometry(current);
-                            if (mode != 1 && current.usable) {
+                            if (mode != 1 && current.usable && !current.pad.isEmpty()) {
                                 check(current.pad.height() >= 96 && current.pad.width() >= 48, "minimum touchpad size");
                             }
                         }
@@ -115,7 +133,7 @@ public final class PanelLayoutTest {
         check(layout(840,360,1,0,0,0).variant == PanelLayout.Variant.WIDE_SHORT, "short variant");
         check(layout(840,900,1,1,0,0).variant == PanelLayout.Variant.LARGE, "large variant");
         check(layout(840,640,1,1,0,0).fullKeyboard, "expansion restores full keyboard");
-        check(!layout(600,640,1,1,0,0).fullKeyboard, "14 key row is not squeezed below 48dp");
+        check(layout(600,640,1,1,0,0).fullKeyboard, "six-row keyboard fits medium windows");
         check(!layout(360,280,1,1,0,0).usable, "keyboard obstruction pauses keyboard");
         check(layout(840,280,1,0,0,0).usable, "wide short touchpad remains usable");
         check(layout(840,280,1,0,0,0).modes[0].top == layout(840,280,1,0,0,0).settings.top,
@@ -136,35 +154,46 @@ public final class PanelLayoutTest {
         // Recorded Thor lower display: 1240x1080 px, densityDpi 369, app height 1025 px.
         float density = 369f / 160;
         PanelLayout thor = layout(1240 / density, 1025 / density, 1, 1, 0, 0);
-        check(thor.usable && !thor.fullKeyboard, "Thor uses layers to retain 48dp keys");
+        check(thor.usable && thor.fullKeyboard, "Thor restores the full computer keyboard");
         near(thor.width, 537.6694f, "Thor width");
         near(thor.height, 444.4444f, "Thor height");
-        near(thor.content.top, 146, "Thor header snapshot");
-        check(thor.pageCount == 2, "Thor letter page count snapshot");
-        near(thor.layerTabs[0].top, thor.pageBack.top, "Thor navigation shares the layer row");
-        check(thor.layerTabs[2].right < thor.pageBack.left, "Thor layers leave room for navigation");
-        check(thor.layerTabs[1].width() >= 4 * 14 + 16 && thor.pageBack.width() >= 3 * 14 + 16,
-                "Thor navigation fits the complete rendered labels");
+        near(thor.content.top, 96, "Thor compact header snapshot");
+        check(thor.pageCount == 1 && thor.layerTabs.length == 0 && thor.pageBack.isEmpty()
+                && thor.pageNext.isEmpty(), "full keyboard does not need layers or pages");
+        check(thor.keys.size() == expected.size(), "all keys visible at once on Thor");
+        check(layout(thor.width, thor.height, 1, 0, 0, 0).option.isEmpty(),
+                "touchpad leaves the old corner toggle position empty");
+        check(thor.option.width() < 160 && thor.modes[0].width() == 96,
+                "Thor top controls use compact widths");
         check(allKeys(thor.width, thor.height, 1).equals(expected), "Thor retains every key");
         PanelLayout thorLocal = PanelLayout.create(thor.width, thor.height, 1, 1, true, false, 0, 0);
-        near(thorLocal.content.bottom, thor.content.bottom - 48, "local keyboard reserves IME strip");
-        check(thorLocal.usable && thorLocal.pageCount == 3, "local Thor keyboard uses three letter pages");
-        near(thorLocal.layerTabs[0].top, thorLocal.pageBack.top, "local Thor shares the navigation row");
+        near(thorLocal.content.bottom, thor.content.bottom, "local keyboard uses measured host viewport");
+        check(thorLocal.usable && thorLocal.fullKeyboard && thorLocal.keys.size() == expected.size(),
+                "local Thor keyboard retains full layout");
         geometry(thorLocal);
         PanelLayout thorEditor = PanelLayout.create(thor.width, thor.height, 1, 2, false, false, 0, 0);
         PanelLayout thorIme = PanelLayout.create(thor.width, thor.height, 1, 2, false, true, 0, 0);
-        near(thorIme.pad.bottom, thorEditor.pad.bottom - 48, "visible IME keeps touchpad above navigation strip");
+        near(thorIme.pad.bottom, thorEditor.pad.bottom, "IME does not reserve an invented navigation strip");
         check(thorIme.usable, "Thor input touchpad stays usable with IME");
         geometry(thorIme);
-        PanelLayout obscured = PanelLayout.create(360, 380, 1, 2, false, true, 0, 0);
-        check(!obscured.usable, "IME strip can pause an otherwise small touchpad");
+        PanelLayout obscured = PanelLayout.create(thor.width, 152.5f, 1, 2, false, true, 0, 0);
+        check(obscured.usable && obscured.pad.isEmpty() && !obscured.imeButton.isEmpty(),
+                "short IME viewport keeps keyboard action without an undersized touchpad");
+        geometry(obscured);
+        for (PanelLayout.Rect mode : obscured.modes)
+            check(mode.bottom < obscured.imeButton.top && mode.bottom < obscured.height,
+                    "mode buttons stay above the keyboard action and real IME top");
+        PanelLayout veryShort = PanelLayout.create(thor.width, 120, 1, 2, false, true, 0, 0);
+        check(!veryShort.usable && veryShort.modes.length == 3,
+                "mode buttons remain available when the input area cannot fit");
+        geometry(veryShort);
         PanelLayout narrowPages = layout(320, 600, 1, 1, 0, 0);
         check(narrowPages.pageCount > 1 && narrowPages.pageBack.top > narrowPages.layerTabs[0].bottom,
                 "narrow navigation keeps its separate row");
-        PanelLayout enlargedPages = layout(thor.width, 640, 1.5f, 1, 0, 0);
+        PanelLayout enlargedPages = layout(thor.width, thor.height, 1.5f, 1, 0, 0);
         check(enlargedPages.pageCount > 1 && enlargedPages.pageBack.top > enlargedPages.layerTabs[0].bottom,
                 "large font keeps separate rows when complete labels would not fit");
-        PanelLayout onePage = layout(600, 900, 1, 1, 0, 0);
+        PanelLayout onePage = layout(411, 900, 1, 1, 0, 0);
         check(onePage.pageCount == 1 && onePage.pageBack.isEmpty() && onePage.pageNext.isEmpty()
                 && onePage.pageIndicator.isEmpty(), "one-page layers omit navigation geometry");
         String snapshots = "Thor lower screen model, 1240 x 1025 px, densityDpi 369, fontScale 1\n"
