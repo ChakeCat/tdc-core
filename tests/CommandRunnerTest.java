@@ -21,7 +21,8 @@ public final class CommandRunnerTest {
         check("输入服务 ready".equals(CommandRunner.run(3000,child("ok"))),"UTF-8 output survives");
         try{CommandRunner.run(3000,child("error"));throw new AssertionError("exit failure lost");}
         catch(IOException expected){check(expected.getMessage().contains("service unavailable"),"stderr explains failure");}
-        check(CommandRunner.run(3000,child("large")).length()==1024*1024,"large output drains without blocking and stays bounded");
+        try{CommandRunner.run(3000,child("large"));throw new AssertionError("truncated command output accepted");}
+        catch(IOException expected){check(expected.getMessage().contains("size limit"),"large output drains but cannot impersonate a complete snapshot");}
         long start=System.nanoTime();
         try{CommandRunner.run(250,child("sleep"));throw new AssertionError("hung command accepted");}
         catch(IOException expected){check(expected.getMessage().contains("超时"),"timeout has actionable error");}

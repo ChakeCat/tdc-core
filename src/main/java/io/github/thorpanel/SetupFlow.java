@@ -9,7 +9,7 @@ package io.github.thorpanel;
 final class SetupFlow {
     enum DeviceKind { THOR, SINGLE }
     enum Page {
-        ENABLE_WIRELESS, PAIR_CODE, PICK_IME, LOWER_INPUT, DONE, RECONNECT
+        ENABLE_WIRELESS, PAIR_CODE, PICK_IME, LOWER_INPUT, DONE, RECONNECT, PICK_REMOTE
     }
     enum Action {
         NONE,
@@ -29,6 +29,7 @@ final class SetupFlow {
         OPEN_TOUCHPAD,
         TOGGLE_AUTO_CONNECT,
         RECONNECT,
+        START_BACKGROUND_PAIRING, CANCEL_BACKGROUND_PAIRING, IN_APP_PAIRING, PICK_REMOTE_APP,
         VIEW_RECOVERY
     }
 
@@ -48,6 +49,9 @@ final class SetupFlow {
         int connectionPort;
         boolean hasKeyboard;
         boolean chooseKeyboard;
+        boolean singleInApp;
+        boolean backgroundPairing;
+        boolean remoteSelected;
         boolean lowerInputDecided;
         boolean lowerInputEnabled;
         boolean lowerDisplayAvailable;
@@ -87,6 +91,7 @@ final class SetupFlow {
 
     static Result decide(Snapshot s){
         if(s==null)s=new Snapshot();
+        if(s.device==DeviceKind.SINGLE)return single(s);
         if(s.wirelessOnly&&s.serviceReady){
             return page(s,Page.DONE,Action.NONE,Action.NONE,false);
         }
@@ -96,6 +101,18 @@ final class SetupFlow {
         if(!s.serviceReady)return connection(s);
         if(!s.hasKeyboard||s.chooseKeyboard)return ime(s);
         if(!s.lowerInputDecided)return lower(s);
+        return done(s);
+    }
+
+    private static Result single(Snapshot s){
+        if(!s.serviceReady){
+            if(s.singleInApp||s.androidBelow11)return connection(s);
+            return new Result(Page.ENABLE_WIRELESS,1,3,
+                    s.backgroundPairing?Action.CANCEL_BACKGROUND_PAIRING:Action.START_BACKGROUND_PAIRING,
+                    Action.IN_APP_PAIRING,false,false,false,false,s.backgroundPairing);
+        }
+        if(s.wirelessOnly)return page(s,Page.DONE,Action.NONE,Action.NONE,false);
+        if(!s.remoteSelected)return page(s,Page.PICK_REMOTE,Action.PICK_REMOTE_APP,Action.NONE,false);
         return done(s);
     }
 
@@ -170,6 +187,7 @@ final class SetupFlow {
 
     static int stepCount(Snapshot s){
         if(s.wirelessOnly)return 1;
+        if(s.device==DeviceKind.SINGLE)return 3;
         // Paired and authorized: skip pair page → 4 steps; otherwise 5.
         if(s.pairedCredentials&&!s.authInvalid)return 4;
         return 5;
@@ -177,6 +195,7 @@ final class SetupFlow {
 
     static int stepOf(Snapshot s,Page page){
         if(s.wirelessOnly)return 1;
+        if(s.device==DeviceKind.SINGLE)return page==Page.DONE?3:page==Page.PICK_REMOTE?2:1;
         boolean skipPair=s.pairedCredentials&&!s.authInvalid;
         switch(page){
             case ENABLE_WIRELESS:case RECONNECT:return 1;

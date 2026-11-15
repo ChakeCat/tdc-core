@@ -14,8 +14,6 @@ final class SessionEpoch {
     private long acceptedSequence;
     private State state=State.ACTIVE;
     private boolean releaseConfirmed;
-    private int heldKeys;
-    private int heldButtons;
 
     synchronized int generation(){return generation;}
     synchronized long sequence(){return sequence;}
@@ -41,38 +39,29 @@ final class SessionEpoch {
 
     /** Begin a mode or target switch: pause input and require release confirmation. */
     synchronized int beginSwitch(){
+        if(state==State.PAUSED||state==State.RELEASING)throw new IllegalStateException("输入正在切换，请稍后重试");
         state=State.PAUSED;
         releaseConfirmed=false;
         generation++;
         return generation;
     }
 
-    synchronized void noteKey(boolean down){
-        if(down)heldKeys++;
-        else if(heldKeys>0)heldKeys--;
-    }
-
-    synchronized void noteButton(boolean down){
-        if(down)heldButtons++;
-        else if(heldButtons>0)heldButtons--;
-    }
-
     synchronized void beginRelease(){
         if(state==State.PAUSED||state==State.RELEASING)state=State.RELEASING;
     }
 
-    /** Confirm all keys and buttons are up after a release attempt. */
-    synchronized boolean confirmRelease(){
-        if(state!=State.RELEASING&&state!=State.PAUSED)return false;
-        if(heldKeys!=0||heldButtons!=0)return false;
+    /** Accept acknowledgment only for this release attempt after every device succeeds. */
+    synchronized boolean confirmRelease(int generation){
+        if(this.generation!=generation||state!=State.RELEASING)return false;
         releaseConfirmed=true;
         return true;
     }
 
     synchronized boolean resume(int generation){
-        if(this.generation!=generation||!releaseConfirmed||heldKeys!=0||heldButtons!=0)return false;
+        if(this.generation!=generation||!releaseConfirmed)return false;
         if(state!=State.PAUSED&&state!=State.RELEASING)return false;
         state=State.ACTIVE;
+        releaseConfirmed=false;
         return true;
     }
 
@@ -81,6 +70,4 @@ final class SessionEpoch {
         releaseConfirmed=false;
     }
 
-    synchronized int heldKeys(){return heldKeys;}
-    synchronized int heldButtons(){return heldButtons;}
 }

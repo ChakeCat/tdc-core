@@ -19,8 +19,9 @@ final class SetupState {
     boolean canUse(){
         if(shizuku!=ShizukuStatus.READY||!hasKeyboard)return false;
         if(profile!=null){
+            if(!profile.apiSupported)return false;
             if(profile.form==DeviceProfile.Form.SINGLE)return false;
-            if(profile.form==DeviceProfile.Form.THOR_DUAL)return profile.canUseThorPanel();
+            if(profile.form==DeviceProfile.Form.THOR_DUAL||profile.form==DeviceProfile.Form.GENERIC_DUAL)return profile.canUseThorPanel();
         }
         return lowerAvailable;
     }

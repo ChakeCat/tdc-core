@@ -45,6 +45,15 @@ public final class DisplayTopologyTest {
         check(phone.form==DeviceProfile.Form.SINGLE&&!phone.canUseThorPanel(),"single profile");
         DeviceProfile oldApi=DeviceProfile.of(thor,false,true,true,true);
         check(!oldApi.canUseThorPanel(),"api gate");
+        DeviceProfile generic=DeviceProfile.of(thor,true,false,true,true);
+        check(generic.form==DeviceProfile.Form.GENERIC_DUAL&&generic.canUseThorPanel(),"display 4 alone does not identify a Thor");
+        check(!generic.aynImeSettings,"generic dual screens cannot inherit AYN input settings");
+        DeviceProfile genericTwo=DeviceProfile.of(other,true,false,true,false);
+        check(genericTwo.form==DeviceProfile.Form.GENERIC_DUAL,"generic display 2 keeps the dual-panel path");
+        DeviceProfile externalProfile=DeviceProfile.of(new DisplayTopology(2,0),true,false,true,true,true);
+        check(externalProfile.form==DeviceProfile.Form.EXTERNAL&&!externalProfile.canUseThorPanel(),"external route uses the experimental host instead of Thor input");
+        check(!externalProfile.aynImeSettings&&externalProfile.topology.upperId==2&&externalProfile.topology.lowerId==0,
+            "external profile retains route orientation without AYN settings");
 
         System.out.println("Passed "+checks+" DisplayTopology / DeviceProfile checks");
     }

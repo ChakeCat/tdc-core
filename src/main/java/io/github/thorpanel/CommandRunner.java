@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Drain output concurrently so a stuck system command cannot hold the service forever. */
@@ -15,12 +16,14 @@ final class CommandRunner {
         Process process=new ProcessBuilder(args).redirectErrorStream(true).start();
         ByteArrayOutputStream output=new ByteArrayOutputStream();
         AtomicReference<IOException> readFailure=new AtomicReference<>();
+        AtomicBoolean truncated=new AtomicBoolean();
         Thread reader=new Thread(()->{
             try(InputStream input=process.getInputStream()){
                 byte[] buffer=new byte[4096];int count;
                 while((count=input.read(buffer))!=-1){
                     int keep=Math.min(count,MAX_OUTPUT-output.size());
                     if(keep>0)output.write(buffer,0,keep);
+                    if(keep<count)truncated.set(true);
                 }
             }catch(IOException e){readFailure.set(e);}
         },"Thor-command-output");
@@ -32,6 +35,7 @@ final class CommandRunner {
             if(remaining>0)reader.join(Math.max(1,TimeUnit.NANOSECONDS.toMillis(remaining)));
             if(reader.isAlive())throw new IOException("读取系统输入状态超时，请重试");
             if(readFailure.get()!=null)throw readFailure.get();
+            if(truncated.get())throw new IOException("System command output exceeds the size limit");
             String result=output.toString("UTF-8");
             if(process.exitValue()!=0)throw new IOException(result.trim());
             return result;
