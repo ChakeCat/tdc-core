@@ -1,0 +1,184 @@
+// Copyright 2026 雷神的锤 contributors
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+package io.github.thorpanel;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+public final class PanelLayoutTest {
+    private static int checks;
+
+    private static void check(boolean condition, String message) {
+        checks++;
+        if (!condition) throw new AssertionError(message);
+    }
+
+    private static void near(float actual, float expected, String message) {
+        check(Math.abs(actual - expected) < .01f, message + ": " + actual + " != " + expected);
+    }
+
+    private static boolean overlaps(PanelLayout.Rect a, PanelLayout.Rect b) {
+        return a.left < b.right - .01f && a.right > b.left + .01f
+                && a.top < b.bottom - .01f && a.bottom > b.top + .01f;
+    }
+
+    private static void add(List<PanelLayout.Rect> targets, PanelLayout.Rect target) {
+        if (!target.isEmpty()) targets.add(target);
+    }
+
+    private static void geometry(PanelLayout layout) {
+        check(layout.textSp >= 12 && layout.keyTextSp >= 12 && layout.modeTextSp >= 12, "minimum font size");
+        List<PanelLayout.Rect> targets = new ArrayList<>();
+        add(targets, layout.settings);
+        add(targets, layout.exit);
+        add(targets, layout.option);
+        for (PanelLayout.Rect mode : layout.modes) add(targets, mode);
+        add(targets, layout.leftButton);
+        add(targets, layout.rightButton);
+        add(targets, layout.speedButton);
+        add(targets, layout.imeButton);
+        for (PanelLayout.Rect tab : layout.layerTabs) add(targets, tab);
+        add(targets, layout.pageBack);
+        add(targets, layout.pageNext);
+        add(targets, layout.pageIndicator);
+        for (PanelLayout.Key key : layout.keys) add(targets, key.bounds);
+        for (PanelLayout.Rect target : targets) {
+            check(target.width() >= 47.99f && target.height() >= 47.99f, "48dp target " + layout.snapshot());
+            check(target.left >= 0 && target.top >= 0 && target.right <= layout.width + .01f
+                    && target.bottom <= layout.height + .01f, "target within viewport " + layout.snapshot());
+            check(target.contains(target.centerX(), target.centerY()), "center hit");
+            check(!target.contains(target.right, target.bottom), "exclusive right/bottom edges");
+        }
+        for (int i = 0; i < targets.size(); i++) {
+            for (int j = i + 1; j < targets.size(); j++) {
+                check(!overlaps(targets.get(i), targets.get(j)), "overlapping targets " + layout.snapshot());
+            }
+            if (!layout.pad.isEmpty()) check(!overlaps(targets.get(i), layout.pad), "button overlaps touchpad");
+        }
+        if (!layout.usable) check(layout.keys.isEmpty() && layout.pad.isEmpty(), "paused layout cannot accept input");
+    }
+
+    private static PanelLayout layout(float width, float height, float scale, int mode, int layer, int page) {
+        return PanelLayout.create(width, height, scale, mode, false, false, layer, page);
+    }
+
+    private static Set<Integer> allKeys(float width, float height, float scale) {
+        Set<Integer> result = new HashSet<>();
+        for (int layer = 0; layer < 3; layer++) {
+            PanelLayout first = layout(width, height, scale, 1, layer, 0);
+            check(first.usable, "keyboard fits test window");
+            for (int page = 0; page < first.pageCount; page++) {
+                PanelLayout current = layout(width, height, scale, 1, layer, page);
+                geometry(current);
+                Set<Integer> perPage = new HashSet<>();
+                for (PanelLayout.Key key : current.keys) {
+                    check(perPage.add(key.code), "no duplicate keys on a page");
+                    result.add(key.code);
+                }
+                check(perPage.contains(59) && perPage.contains(113) && perPage.contains(57)
+                        && perPage.contains(117), "every page retains modifiers");
+            }
+        }
+        return result;
+    }
+
+    public static void main(String[] args) throws Exception {
+        for (int width : new int[]{320, 360, 411, 600, 840}) {
+            for (int height : new int[]{180, 280, 360, 480, 640, 900}) {
+                for (float scale : new float[]{1, 1.3f, 1.5f, 2}) {
+                    for (int mode = 0; mode < 3; mode++) {
+                        for (int layer = 0; layer < 3; layer++) {
+                            PanelLayout current = layout(width, height, scale, mode, layer, 0);
+                            geometry(current);
+                            if (mode != 1 && current.usable) {
+                                check(current.pad.height() >= 96 && current.pad.width() >= 48, "minimum touchpad size");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Set<Integer> expected = new HashSet<>();
+        for (int code : new int[]{111,131,132,133,134,135,136,137,138,139,140,141,142,
+                68,8,9,10,11,12,13,14,15,16,7,69,70,67,61,45,51,33,46,48,53,49,37,43,44,71,72,73,
+                115,29,47,32,34,35,36,38,39,40,74,75,66,59,54,52,31,50,30,42,41,55,56,76,19,112,
+                113,117,57,62,122,123,21,20,22}) expected.add(code);
+        for (int width : new int[]{320,360,411,600,840}) {
+            check(allKeys(width, 640, 1).equals(expected), "all original keys reachable at " + width);
+            check(allKeys(width, 900, 1.5f).equals(expected), "all keys reachable with large text at " + width);
+        }
+        check(layout(320,640,1,1,0,0).variant == PanelLayout.Variant.NARROW, "narrow variant");
+        check(layout(620,640,1,0,0,0).variant == PanelLayout.Variant.STANDARD, "standard variant");
+        check(layout(840,360,1,0,0,0).variant == PanelLayout.Variant.WIDE_SHORT, "short variant");
+        check(layout(840,900,1,1,0,0).variant == PanelLayout.Variant.LARGE, "large variant");
+        check(layout(840,640,1,1,0,0).fullKeyboard, "expansion restores full keyboard");
+        check(!layout(600,640,1,1,0,0).fullKeyboard, "14 key row is not squeezed below 48dp");
+        check(!layout(360,280,1,1,0,0).usable, "keyboard obstruction pauses keyboard");
+        check(layout(840,280,1,0,0,0).usable, "wide short touchpad remains usable");
+        check(layout(840,280,1,0,0,0).modes[0].top == layout(840,280,1,0,0,0).settings.top,
+                "wide short mode tabs share header row");
+        PanelLayout giant = layout(1600,1400,1,1,0,0);
+        for (PanelLayout.Key key : giant.keys) check(key.bounds.height() <= 64.01f, "large screen key height cap");
+        float min = Float.MAX_VALUE, max = 0;
+        for (PanelLayout.Key key : giant.keys) {
+            min = Math.min(min, key.bounds.left);
+            max = Math.max(max, key.bounds.right);
+        }
+        check(max - min <= 1000.01f, "large screen keyboard width cap");
+        PanelLayout last = layout(320,640,1,1,0,999);
+        check(last.page == last.pageCount - 1, "late page index clamps after resize");
+        check(layout(320,640,1,1,-10,-10).page == 0, "negative page clamps");
+        check(!layout(Float.NaN,Float.POSITIVE_INFINITY,1,0,0,0).usable, "invalid dimensions pause input");
+
+        // Recorded Thor lower display: 1240x1080 px, densityDpi 369, app height 1025 px.
+        float density = 369f / 160;
+        PanelLayout thor = layout(1240 / density, 1025 / density, 1, 1, 0, 0);
+        check(thor.usable && !thor.fullKeyboard, "Thor uses layers to retain 48dp keys");
+        near(thor.width, 537.6694f, "Thor width");
+        near(thor.height, 444.4444f, "Thor height");
+        near(thor.content.top, 146, "Thor header snapshot");
+        check(thor.pageCount == 2, "Thor letter page count snapshot");
+        near(thor.layerTabs[0].top, thor.pageBack.top, "Thor navigation shares the layer row");
+        check(thor.layerTabs[2].right < thor.pageBack.left, "Thor layers leave room for navigation");
+        check(thor.layerTabs[1].width() >= 4 * 14 + 16 && thor.pageBack.width() >= 3 * 14 + 16,
+                "Thor navigation fits the complete rendered labels");
+        check(allKeys(thor.width, thor.height, 1).equals(expected), "Thor retains every key");
+        PanelLayout thorLocal = PanelLayout.create(thor.width, thor.height, 1, 1, true, false, 0, 0);
+        near(thorLocal.content.bottom, thor.content.bottom - 48, "local keyboard reserves IME strip");
+        check(thorLocal.usable && thorLocal.pageCount == 3, "local Thor keyboard uses three letter pages");
+        near(thorLocal.layerTabs[0].top, thorLocal.pageBack.top, "local Thor shares the navigation row");
+        geometry(thorLocal);
+        PanelLayout thorEditor = PanelLayout.create(thor.width, thor.height, 1, 2, false, false, 0, 0);
+        PanelLayout thorIme = PanelLayout.create(thor.width, thor.height, 1, 2, false, true, 0, 0);
+        near(thorIme.pad.bottom, thorEditor.pad.bottom - 48, "visible IME keeps touchpad above navigation strip");
+        check(thorIme.usable, "Thor input touchpad stays usable with IME");
+        geometry(thorIme);
+        PanelLayout obscured = PanelLayout.create(360, 380, 1, 2, false, true, 0, 0);
+        check(!obscured.usable, "IME strip can pause an otherwise small touchpad");
+        PanelLayout narrowPages = layout(320, 600, 1, 1, 0, 0);
+        check(narrowPages.pageCount > 1 && narrowPages.pageBack.top > narrowPages.layerTabs[0].bottom,
+                "narrow navigation keeps its separate row");
+        PanelLayout enlargedPages = layout(thor.width, 640, 1.5f, 1, 0, 0);
+        check(enlargedPages.pageCount > 1 && enlargedPages.pageBack.top > enlargedPages.layerTabs[0].bottom,
+                "large font keeps separate rows when complete labels would not fit");
+        PanelLayout onePage = layout(600, 900, 1, 1, 0, 0);
+        check(onePage.pageCount == 1 && onePage.pageBack.isEmpty() && onePage.pageNext.isEmpty()
+                && onePage.pageIndicator.isEmpty(), "one-page layers omit navigation geometry");
+        String snapshots = "Thor lower screen model, 1240 x 1025 px, densityDpi 369, fontScale 1\n"
+                + "Touchpad\n" + layout(thor.width, thor.height, 1, 0, 0, 0).snapshot()
+                + "Remote keyboard\n" + thor.snapshot()
+                + "Local keyboard\n" + thorLocal.snapshot()
+                + "Input, IME hidden\n" + thorEditor.snapshot()
+                + "Input, IME visible\n" + thorIme.snapshot();
+        String snapshotPath = System.getProperty("panel.snapshot");
+        if (snapshotPath != null) {
+            check(snapshots.equals(java.nio.file.Files.readString(java.nio.file.Path.of(snapshotPath))),
+                    "Thor coordinate snapshot changed. Review the layout before updating the fixture.");
+        }
+        if (args.length > 0 && args[0].equals("--snapshot")) System.out.print(snapshots);
+        System.out.println("Passed " + checks + " panel layout checks");
+    }
+}

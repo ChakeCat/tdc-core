@@ -5,11 +5,13 @@ package io.github.thorpanel;
 
 /** Some dual-screen IMEs draw a Presentation instead of a standard IME surface. */
 final class ImeWindowState {
-    static boolean hasLowerKeys(String dump,String imeId){
-        if(dump==null||imeId==null||!imeId.contains("/"))return false;
+    static boolean hasLowerKeys(String dump,String imeId){return hasLowerKeys(dump,imeId,4);}
+    static boolean hasLowerKeys(String dump,String imeId,int displayId){
+        if(dump==null||imeId==null||!imeId.contains("/")||displayId<0)return false;
+        String marker="mDisplayId="+displayId+" ";
         String owner="package="+imeId.substring(0,imeId.indexOf('/'))+" ";
         for(String window:dump.split("\n  Window #")){
-            if(!window.contains("mDisplayId=4 ")||!window.contains(owner)||!window.contains("isVisible=true")
+            if(!window.contains(marker)||!window.contains(owner)||!window.contains("isVisible=true")
                 ||!window.contains("mDrawState=HAS_DRAWN")||!window.contains("Surface: shown=true"))continue;
             if(window.contains("ty=PRESENTATION "))return true;
             if(window.contains("ty=APPLICATION_ATTACHED_DIALOG ")&&window.contains("mParentWindow=Window{")&&window.contains(" u0 InputMethod}"))return true;
@@ -22,11 +24,13 @@ final class ImeWindowState {
         }
         return false;
     }
-    static boolean hasLowerPresentation(String dump,String imeId){
-        if(imeId==null||!imeId.contains("/"))return false;
+    static boolean hasLowerPresentation(String dump,String imeId){return hasLowerPresentation(dump,imeId,4);}
+    static boolean hasLowerPresentation(String dump,String imeId,int displayId){
+        if(imeId==null||!imeId.contains("/")||displayId<0)return false;
+        String marker="mDisplayId="+displayId+" ";
         String owner="package="+imeId.substring(0,imeId.indexOf('/'))+" ";
         for(String window:dump.split("\\n  Window #"))
-            if(window.contains("mDisplayId=4 ")&&window.contains(owner)
+            if(window.contains(marker)&&window.contains(owner)
                 &&window.contains("ty=PRESENTATION ")&&window.contains("isVisible=true")
                 &&window.contains("mDrawState=HAS_DRAWN")&&window.contains("Surface: shown=true"))return true;
         return false;
