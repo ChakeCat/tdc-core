@@ -8,8 +8,15 @@ final class PanelRegionPolicy {
     enum Orientation { HORIZONTAL, VERTICAL }
 
     enum Reason {
-        FULL_WINDOW, BELOW_HINGE, BOTTOM_DOCK, BELOW_HINGE_DOCK, TABLETOP_DOCK,
-        TOO_SMALL, VERTICAL_HINGE, INVALID_DIMENSIONS, INVALID_HINGE
+        FULL_WINDOW,
+        BELOW_HINGE,
+        BOTTOM_DOCK,
+        BELOW_HINGE_DOCK,
+        TABLETOP_DOCK,
+        TOO_SMALL,
+        VERTICAL_HINGE,
+        INVALID_DIMENSIONS,
+        INVALID_HINGE
     }
 
     enum RouteSource { THOR, GENERIC_DUAL, EXTERNAL, SINGLE, UNAVAILABLE }
@@ -29,7 +36,9 @@ final class PanelRegionPolicy {
             this.occluding = occluding;
         }
 
-        boolean active() { return separating || tabletop || occluding; }
+        boolean active() {
+            return separating || tabletop || occluding;
+        }
     }
 
     static final class Region {
@@ -61,7 +70,8 @@ final class PanelRegionPolicy {
 
     private static final PanelLayout.Rect EMPTY = new PanelLayout.Rect(0, 0, 0, 0);
 
-    private PanelRegionPolicy() {}
+    private PanelRegionPolicy() {
+    }
 
     /**
      * A horizontal hinge leaves the area below it usable. A zero-thickness fold
@@ -70,15 +80,21 @@ final class PanelRegionPolicy {
      * A vertical separator requires a future side-aware layout, so input pauses.
      */
     static Region panel(float width, float height, Hinge hinge, float minWidth, float minHeight) {
-        if (!positive(width) || !positive(height) || !nonnegative(minWidth) || !nonnegative(minHeight)) {
+        if (!positive(width) || !positive(height) || !nonnegative(minWidth)
+                || !nonnegative(minHeight)) {
             return new Region(EMPTY, false, Reason.INVALID_DIMENSIONS);
         }
         PanelLayout.Rect window = new PanelLayout.Rect(0, 0, width, height);
-        if (hinge == null || !hinge.active()) return sized(window, minWidth, minHeight, Reason.FULL_WINDOW);
-        if (!validHinge(hinge)) return new Region(window, false, Reason.INVALID_HINGE);
-        if (!intersects(window, hinge)) return sized(window, minWidth, minHeight, Reason.FULL_WINDOW);
-        if (hinge.orientation == Orientation.VERTICAL) return new Region(window, false, Reason.VERTICAL_HINGE);
-        PanelLayout.Rect below = new PanelLayout.Rect(0, Math.min(height, Math.max(0, hinge.bounds.bottom)), width, height);
+        if (hinge == null || !hinge.active())
+            return sized(window, minWidth, minHeight, Reason.FULL_WINDOW);
+        if (!validHinge(hinge))
+            return new Region(window, false, Reason.INVALID_HINGE);
+        if (!intersects(window, hinge))
+            return sized(window, minWidth, minHeight, Reason.FULL_WINDOW);
+        if (hinge.orientation == Orientation.VERTICAL)
+            return new Region(window, false, Reason.VERTICAL_HINGE);
+        PanelLayout.Rect below = new PanelLayout.Rect(
+                0, Math.min(height, Math.max(0, hinge.bounds.bottom)), width, height);
         return sized(below, minWidth, minHeight, Reason.BELOW_HINGE);
     }
 
@@ -89,12 +105,14 @@ final class PanelRegionPolicy {
      */
     static Region floating(float hostWidth, float hostHeight, float requestedHeight,
             boolean landscape, Hinge hinge, float minWidth, float minHeight) {
-        if (!positive(requestedHeight)) return new Region(EMPTY, false, Reason.INVALID_DIMENSIONS);
+        if (!positive(requestedHeight))
+            return new Region(EMPTY, false, Reason.INVALID_DIMENSIONS);
         Region available = panel(hostWidth, hostHeight, hinge, minWidth, minHeight);
-        if (!available.usable) return available;
+        if (!available.usable)
+            return available;
         float height = Math.min(available.bounds.height(), Math.max(requestedHeight, minHeight));
-        PanelLayout.Rect dock = new PanelLayout.Rect(available.bounds.left, available.bounds.bottom - height,
-                available.bounds.right, available.bounds.bottom);
+        PanelLayout.Rect dock = new PanelLayout.Rect(available.bounds.left,
+                available.bounds.bottom - height, available.bounds.right, available.bounds.bottom);
         Reason reason = Reason.BOTTOM_DOCK;
         if (available.reason == Reason.BELOW_HINGE) {
             reason = landscape && hinge.tabletop ? Reason.TABLETOP_DOCK : Reason.BELOW_HINGE_DOCK;
@@ -108,34 +126,44 @@ final class PanelRegionPolicy {
      * Do not pass an arbitrary two-screen topology as a Thor preference.
      */
     static Route displayRoute(int localId, int[] externalIds, DisplayTopology thorPreferred) {
-        if (thorPreferred != null && thorPreferred.dualScreen
-                && thorPreferred.upperId >= 0 && thorPreferred.lowerId >= 0) {
+        if (thorPreferred != null && thorPreferred.dualScreen && thorPreferred.upperId >= 0
+                && thorPreferred.lowerId >= 0) {
             return new Route(thorPreferred.upperId, thorPreferred.lowerId, RouteSource.THOR);
         }
-        if (localId < 0) return new Route(DisplayTopology.NONE, DisplayTopology.NONE, RouteSource.UNAVAILABLE);
+        if (localId < 0)
+            return new Route(DisplayTopology.NONE, DisplayTopology.NONE, RouteSource.UNAVAILABLE);
         if (externalIds != null) {
             for (int externalId : externalIds) {
-                if (externalId >= 0 && externalId != localId) return new Route(externalId, localId, RouteSource.EXTERNAL);
+                if (externalId >= 0 && externalId != localId)
+                    return new Route(externalId, localId, RouteSource.EXTERNAL);
             }
         }
         return new Route(localId, localId, RouteSource.SINGLE);
     }
 
-    private static Region sized(PanelLayout.Rect bounds, float minWidth, float minHeight, Reason reason) {
-        boolean usable = bounds.width() > 0 && bounds.height() > 0
-                && bounds.width() >= minWidth && bounds.height() >= minHeight;
+    private static Region sized(
+            PanelLayout.Rect bounds, float minWidth, float minHeight, Reason reason) {
+        boolean usable = bounds.width() > 0 && bounds.height() > 0 && bounds.width() >= minWidth
+                && bounds.height() >= minHeight;
         return new Region(bounds, usable, usable ? reason : Reason.TOO_SMALL);
     }
 
-    private static boolean positive(float value) { return Float.isFinite(value) && value > 0; }
-    private static boolean nonnegative(float value) { return Float.isFinite(value) && value >= 0; }
+    private static boolean positive(float value) {
+        return Float.isFinite(value) && value > 0;
+    }
+    private static boolean nonnegative(float value) {
+        return Float.isFinite(value) && value >= 0;
+    }
 
     private static boolean validHinge(Hinge hinge) {
-        if (hinge.bounds == null || hinge.orientation == null) return false;
+        if (hinge.bounds == null || hinge.orientation == null)
+            return false;
         PanelLayout.Rect bounds = hinge.bounds;
         if (!Float.isFinite(bounds.left) || !Float.isFinite(bounds.top)
-                || !Float.isFinite(bounds.right) || !Float.isFinite(bounds.bottom)) return false;
-        return hinge.orientation == Orientation.HORIZONTAL ? bounds.width() > 0 : bounds.height() > 0;
+                || !Float.isFinite(bounds.right) || !Float.isFinite(bounds.bottom))
+            return false;
+        return hinge.orientation == Orientation.HORIZONTAL ? bounds.width() > 0
+                                                           : bounds.height() > 0;
     }
 
     private static boolean intersects(PanelLayout.Rect window, Hinge hinge) {

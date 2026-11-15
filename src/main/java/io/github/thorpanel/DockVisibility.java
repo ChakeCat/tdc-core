@@ -4,14 +4,32 @@ package io.github.thorpanel;
 
 /** The background follows the keyboard, except while explicitly opening or in settings. */
 final class DockVisibility {
-    private boolean keyboard,opening,settings;
+    private boolean keyboard, opening, settings;
     private int editorDisplay;
-    void editorDisplay(int display){editorDisplay=display;}
-    boolean upperEditor(){return editorDisplay==0;}
-    void beginOpen(){opening=true;settings=false;}
-    void finishOpen(){opening=false;}
-    void showSettings(){settings=true;opening=false;}
-    void dismissSettings(){settings=false;}
-    void keyboard(boolean visible){keyboard=visible;}
-    boolean visible(){return upperEditor()&&!settings&&(opening||keyboard);}
+    void editorDisplay(int display) {
+        editorDisplay = display;
+    }
+    boolean upperEditor() {
+        return editorDisplay == 0;
+    }
+    void beginOpen() {
+        opening = true;
+        settings = false;
+    }
+    void finishOpen() {
+        opening = false;
+    }
+    void showSettings() {
+        settings = true;
+        opening = false;
+    }
+    void dismissSettings() {
+        settings = false;
+    }
+    void keyboard(boolean visible) {
+        keyboard = visible;
+    }
+    boolean visible() {
+        return upperEditor() && !settings && (opening || keyboard);
+    }
 }

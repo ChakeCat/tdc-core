@@ -24,10 +24,11 @@ final class ModePolicy {
         final Posture posture;
         final boolean splitSupported, shellSplitSupported, overlayAllowed;
 
-        Host(String deviceKey, int remoteDisplayId, int panelDisplayId,
-                Orientation orientation, Posture posture, boolean splitSupported,
-                boolean shellSplitSupported, boolean overlayAllowed) {
-            if (deviceKey == null || deviceKey.isEmpty() || remoteDisplayId < 0 || panelDisplayId < 0) {
+        Host(String deviceKey, int remoteDisplayId, int panelDisplayId, Orientation orientation,
+                Posture posture, boolean splitSupported, boolean shellSplitSupported,
+                boolean overlayAllowed) {
+            if (deviceKey == null || deviceKey.isEmpty() || remoteDisplayId < 0
+                    || panelDisplayId < 0) {
                 throw new IllegalArgumentException("A device and valid display ids are required");
             }
             this.deviceKey = deviceKey;
@@ -40,18 +41,24 @@ final class ModePolicy {
             this.overlayAllowed = overlayAllowed;
         }
 
-        boolean dualScreen() { return remoteDisplayId != panelDisplayId; }
+        boolean dualScreen() {
+            return remoteDisplayId != panelDisplayId;
+        }
 
-        @Override public boolean equals(Object value) {
-            if (!(value instanceof Host)) return false;
-            Host other = (Host)value;
+        @Override
+        public boolean equals(Object value) {
+            if (!(value instanceof Host))
+                return false;
+            Host other = (Host) value;
             return deviceKey.equals(other.deviceKey) && remoteDisplayId == other.remoteDisplayId
                     && panelDisplayId == other.panelDisplayId && orientation == other.orientation
                     && posture == other.posture && splitSupported == other.splitSupported
-                    && shellSplitSupported == other.shellSplitSupported && overlayAllowed == other.overlayAllowed;
+                    && shellSplitSupported == other.shellSplitSupported
+                    && overlayAllowed == other.overlayAllowed;
         }
 
-        @Override public int hashCode() {
+        @Override
+        public int hashCode() {
             return Objects.hash(deviceKey, remoteDisplayId, panelDisplayId, orientation, posture,
                     splitSupported, shellSplitSupported, overlayAllowed);
         }
@@ -63,10 +70,12 @@ final class ModePolicy {
 
         synchronized Preference get(String deviceKey, Orientation orientation) {
             Map<Orientation, Preference> choices = devices.get(deviceKey);
-            return choices == null ? Preference.AUTO : choices.getOrDefault(orientation, Preference.AUTO);
+            return choices == null ? Preference.AUTO
+                                   : choices.getOrDefault(orientation, Preference.AUTO);
         }
 
-        synchronized void remember(String deviceKey, Orientation orientation, Preference preference) {
+        synchronized void remember(
+                String deviceKey, Orientation orientation, Preference preference) {
             Objects.requireNonNull(deviceKey);
             Objects.requireNonNull(orientation);
             Objects.requireNonNull(preference);
@@ -74,11 +83,13 @@ final class ModePolicy {
                 Map<Orientation, Preference> choices = devices.get(deviceKey);
                 if (choices != null) {
                     choices.remove(orientation);
-                    if (choices.isEmpty()) devices.remove(deviceKey);
+                    if (choices.isEmpty())
+                        devices.remove(deviceKey);
                 }
                 return;
             }
-            devices.computeIfAbsent(deviceKey, ignored -> new HashMap<>()).put(orientation, preference);
+            devices.computeIfAbsent(deviceKey, ignored -> new HashMap<>())
+                    .put(orientation, preference);
         }
     }
 
@@ -94,11 +105,12 @@ final class ModePolicy {
         }
     }
 
-    private ModePolicy() {}
+    private ModePolicy() {
+    }
 
     static Orientation orientation(float maximumWidth, float maximumHeight) {
-        if (!Float.isFinite(maximumWidth) || !Float.isFinite(maximumHeight)
-                || maximumWidth <= 0 || maximumHeight <= 0) {
+        if (!Float.isFinite(maximumWidth) || !Float.isFinite(maximumHeight) || maximumWidth <= 0
+                || maximumHeight <= 0) {
             throw new IllegalArgumentException("A positive host display region is required");
         }
         return maximumWidth > maximumHeight ? Orientation.LANDSCAPE : Orientation.PORTRAIT;
@@ -118,7 +130,8 @@ final class ModePolicy {
                 // Capability probing selects one split executor. A timed-out request falls back to overlay.
                 attempts.add(host.shellSplitSupported ? Mode.WM_SPLIT : Mode.ADJACENT_SPLIT);
             }
-            if (host.overlayAllowed) attempts.add(Mode.FLOATING);
+            if (host.overlayAllowed)
+                attempts.add(Mode.FLOATING);
             attempts.add(Mode.MANUAL_SPLIT);
         }
         return new Plan(host, preference, attempts);
