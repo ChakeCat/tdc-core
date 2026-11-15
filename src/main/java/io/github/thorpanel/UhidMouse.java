@@ -22,10 +22,31 @@ final class UhidMouse implements AutoCloseable {
             0x02, (byte) 0x95, 0x01, (byte) 0x81, 0x06, // Consumer AC Pan -> REL_HWHEEL
             (byte) 0xc0, (byte) 0xc0};
     UhidMouse() throws IOException {
-        out = new FileOutputStream("/dev/uhid");
+        this("Thor Panel Mouse");
+    }
+    UhidMouse(String deviceName) throws IOException {
+        byte[] event = createEvent(deviceName);
+        FileOutputStream device = new FileOutputStream("/dev/uhid");
+        try {
+            device.write(event);
+            out = device;
+        } catch (IOException failure) {
+            try {
+                device.close();
+            } catch (IOException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+            throw failure;
+        }
+    }
+    static byte[] createEvent(String deviceName) {
+        if (deviceName == null || deviceName.isEmpty() || deviceName.indexOf('\0') >= 0)
+            throw new IllegalArgumentException("Invalid UHID device name");
+        byte[] name = deviceName.getBytes(StandardCharsets.UTF_8);
+        if (name.length > 127)
+            throw new IllegalArgumentException("UHID device name is too long");
         ByteBuffer b = ByteBuffer.allocate(280 + DESCRIPTOR.length).order(ByteOrder.LITTLE_ENDIAN);
         b.putInt(11);
-        byte[] name = "Thor Panel Mouse".getBytes(StandardCharsets.UTF_8);
         b.put(name);
         b.position(4 + 128 + 64 + 64);
         b.putShort((short) DESCRIPTOR.length);
@@ -35,7 +56,7 @@ final class UhidMouse implements AutoCloseable {
         b.putInt(1);
         b.putInt(0);
         b.put(DESCRIPTOR);
-        out.write(b.array());
+        return b.array();
     }
     private void report(int dx, int dy, int wheel, int pan) throws IOException {
         ByteBuffer b = ByteBuffer.allocate(11).order(ByteOrder.LITTLE_ENDIAN);

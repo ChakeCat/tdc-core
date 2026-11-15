@@ -240,5 +240,73 @@ public final class InteractionTest {
         check(!restored.showGuide(true)&&restored.canUse(),"restored prerequisites resume normal launch");
         check(ready.canUse()==restored.canUse(),"choosing an ordinary IME does not force setup again");
     }
-    public static void main(String[] args){padTests();modifierTests();imeWindowTests();imeConnectionTests();routeTests();dockVisibilityTests();setupTests();System.out.println("Passed "+checks+" interaction checks");}
+    private static void deviceIdentityTests() {
+        String[] names = {"Thor Panel Mouse", "Thor Panel Beta Mouse", "Thor Panel Keyboard",
+                "Thor Panel Beta Keyboard", "x".repeat(127), "锤".repeat(42)};
+        for (String name : names) {
+            byte[] encoded = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            for (boolean mouse : new boolean[] {true, false}) {
+                byte[] event = mouse ? UhidMouse.createEvent(name) : UhidKeyboard.createEvent(name);
+                java.nio.ByteBuffer bytes = java.nio.ByteBuffer.wrap(event)
+                        .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                check(bytes.getInt(0) == 11, "identity uses UHID_CREATE2");
+                check(java.util.Arrays.equals(encoded,
+                                java.util.Arrays.copyOfRange(event, 4, 4 + encoded.length)),
+                        "exact UTF-8 device name is encoded without truncation");
+                boolean paddingClear = true;
+                for (int i = 4 + encoded.length; i < 260; i++)
+                    paddingClear &= event[i] == 0;
+                check(paddingClear, "name has terminating zero and remaining identity fields stay clear");
+                check(Short.toUnsignedInt(bytes.getShort(260)) == event.length - 280
+                                && bytes.getShort(262) == 3 && bytes.getInt(264) == 0x1209
+                                && bytes.getInt(268) == (mouse ? 0x5450 : 0x5451)
+                                && bytes.getInt(272) == 1 && bytes.getInt(276) == 0,
+                        "name does not overwrite HID descriptor metadata");
+            }
+        }
+        check(java.util.Arrays.equals(
+                        java.util.Arrays.copyOfRange(UhidMouse.createEvent(names[0]), 132,
+                                UhidMouse.createEvent(names[0]).length),
+                        java.util.Arrays.copyOfRange(UhidMouse.createEvent(names[1]), 132,
+                                UhidMouse.createEvent(names[1]).length)),
+                "beta mouse changes only its name");
+        check(java.util.Arrays.equals(
+                        java.util.Arrays.copyOfRange(UhidKeyboard.createEvent(names[2]), 132,
+                                UhidKeyboard.createEvent(names[2]).length),
+                        java.util.Arrays.copyOfRange(UhidKeyboard.createEvent(names[3]), 132,
+                                UhidKeyboard.createEvent(names[3]).length)),
+                "beta keyboard changes only its name");
+        for (String name : new String[] {null, "", "bad\0name", "x".repeat(128), "锤".repeat(43)}) {
+            try {
+                new UhidMouse(name);
+                throw new AssertionError("invalid mouse identity accepted");
+            } catch (IllegalArgumentException expected) {
+                check(true, "invalid mouse name rejected before opening the device");
+            } catch (java.io.IOException openedDevice) {
+                throw new AssertionError("invalid mouse name reached /dev/uhid", openedDevice);
+            }
+            try {
+                new UhidKeyboard(name);
+                throw new AssertionError("invalid keyboard identity accepted");
+            } catch (IllegalArgumentException expected) {
+                check(true, "invalid keyboard name rejected before opening the device");
+            } catch (java.io.IOException openedDevice) {
+                throw new AssertionError("invalid keyboard name reached /dev/uhid", openedDevice);
+            }
+        }
+        String beta = "io.github.thorpanel.beta", stable = "io.github.thorpanel";
+        check(!InputRoutePolicy.explicitExternalChoice(beta + "/io.github.thorpanel.RelayIme", beta),
+                "beta gateway remains owned by beta routing");
+        check(!InputRoutePolicy.explicitExternalChoice(beta + "/io.github.thorpanel.DirectIme", beta),
+                "beta direct input remains owned by beta routing");
+        check(InputRoutePolicy.explicitExternalChoice(stable + "/.RelayIme", beta),
+                "choosing stable gateway is an explicit external choice for beta");
+        check(InputRoutePolicy.explicitExternalChoice(beta + "/io.github.thorpanel.RelayIme", stable),
+                "choosing beta gateway is an explicit external choice for stable");
+        check(InputRoutePolicy.explicitExternalChoice(beta + "2/.RelayIme", beta),
+                "package-prefix similarity cannot capture another input method");
+        check(!InputRoutePolicy.explicitExternalChoice(null, beta),
+                "unavailable input method is not a manual beta choice");
+    }
+    public static void main(String[] args){padTests();modifierTests();imeWindowTests();imeConnectionTests();routeTests();dockVisibilityTests();setupTests();deviceIdentityTests();System.out.println("Passed "+checks+" interaction checks");}
 }

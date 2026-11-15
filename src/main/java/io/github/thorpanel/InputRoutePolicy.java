@@ -22,6 +22,11 @@ final class InputRoutePolicy {
         return visible ? OPENED : CLOSED;
     }
     static boolean explicitExternalChoice(String selected) {
-        return selected != null && !selected.startsWith("io.github.thorpanel/");
+        return explicitExternalChoice(selected, "io.github.thorpanel");
+    }
+    static boolean explicitExternalChoice(String selected, String ownPackage) {
+        if (ownPackage == null || ownPackage.isEmpty())
+            throw new IllegalArgumentException("Missing input method owner");
+        return selected != null && !selected.startsWith(ownPackage + "/");
     }
 }

@@ -22,10 +22,32 @@ final class UhidKeyboard implements AutoCloseable {
             0x06, 0x75, 0x08, 0x15, 0x00, 0x25, 0x65, 0x05, 0x07, 0x19, 0x00, 0x29, 0x65,
             (byte) 0x81, 0x00, (byte) 0xc0};
     UhidKeyboard() throws IOException {
-        out = new FileOutputStream("/dev/uhid");
+        this("Thor Panel Keyboard");
+    }
+    UhidKeyboard(String deviceName) throws IOException {
+        byte[] event = createEvent(deviceName);
+        FileOutputStream device = new FileOutputStream("/dev/uhid");
+        try {
+            device.write(event);
+            out = device;
+        } catch (IOException failure) {
+            try {
+                device.close();
+            } catch (IOException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+            throw failure;
+        }
+    }
+    static byte[] createEvent(String deviceName) {
+        if (deviceName == null || deviceName.isEmpty() || deviceName.indexOf('\0') >= 0)
+            throw new IllegalArgumentException("Invalid UHID device name");
+        byte[] name = deviceName.getBytes(StandardCharsets.UTF_8);
+        if (name.length > 127)
+            throw new IllegalArgumentException("UHID device name is too long");
         ByteBuffer b = ByteBuffer.allocate(280 + DESCRIPTOR.length).order(ByteOrder.LITTLE_ENDIAN);
         b.putInt(11);
-        b.put("Thor Panel Keyboard".getBytes(StandardCharsets.UTF_8));
+        b.put(name);
         b.position(260);
         b.putShort((short) DESCRIPTOR.length);
         b.putShort((short) 3);
@@ -34,7 +56,7 @@ final class UhidKeyboard implements AutoCloseable {
         b.putInt(1);
         b.putInt(0);
         b.put(DESCRIPTOR);
-        out.write(b.array());
+        return b.array();
     }
     private static int modifier(int code) {
         switch (code) {
