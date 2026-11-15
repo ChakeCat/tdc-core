@@ -13,6 +13,11 @@ Thor Core 是雷神的锤使用的 Java 核心模块。它提供触控板手势�
 | `InputRoutePolicy`、`DockVisibility`、`SetupState` | 根据调用方传入的状态，判断输入法选择、下屏背景显示和引导条件。 |
 | `ImeWindowState`、`ImeSurfaceState`、`ImeConnectionState` | 解析调用方提供的 Android 系统状态文本，判断输入法窗口与编辑器连接。 |
 | `RemoteLaunchPolicy` | 根据前台应用变化和绑定列表，决定是否触发一次远控联动。它不读取系统任务，也不启动应用。 |
+| `SessionEpoch` | 隔离输入代际，只有当前释放确认成功后才恢复输入。 |
+| `DisplayTopology`、`DeviceProfile`、`PanelRegionPolicy` | 根据调用方的显示信息选择设备形态、外接路由与铰链下方区域。 |
+| `PanelLayout` | 根据 dp 尺寸和字体比例生成面板布局与键层。 |
+| `ModePolicy`、`ModeTransition` | 选择窗口形态，管理稳定等待、超时、回读与输入交接。 |
+| `WindowTaskState` | 解析任务和窗口快照，校验任务位置，未知格式不确认成功。 |
 | `UhidMouse`、`UhidKeyboard` | 向 Linux `/dev/uhid` 写入虚拟鼠标和键盘报告。 |
 | `CommandRunner` | 运行调用方指定的程序，限制等待时间和保留的输出大小。 |
 
@@ -30,7 +35,7 @@ javac --release 11 -encoding UTF-8 -d build/classes \
   src/main/java/io/github/thorpanel/*.java
 ```
 
-运行全部四个测试入口：
+运行全部十个测试入口：
 
 ```sh
 (
@@ -39,8 +44,8 @@ javac --release 11 -encoding UTF-8 -d build/classes \
   trap 'rm -rf "$core_classes"' EXIT
   javac --release 11 -encoding UTF-8 -d "$core_classes" \
     src/main/java/io/github/thorpanel/*.java tests/*.java
-  for core_test in InteractionTest KeyboardInputTest CommandRunnerTest RemoteLaunchPolicyTest; do
-    java -cp "$core_classes" "io.github.thorpanel.$core_test"
+  for core_test in InteractionTest KeyboardInputTest CommandRunnerTest RemoteLaunchPolicyTest DisplayTopologyTest SessionEpochTest ModePolicyTest PanelLayoutTest PanelRegionPolicyTest WindowTaskStateTest; do
+    java -Dpanel.snapshot=tests/fixtures/panel-thor-default.txt -cp "$core_classes" "io.github.thorpanel.$core_test"
   done
 )
 ```
@@ -49,7 +54,9 @@ javac --release 11 -encoding UTF-8 -d build/classes \
 
 测试覆盖手势、按键状态、输入状态文本解析、远控触发策略，以及子进程输出、超时和中断。测试不打开 `/dev/uhid`，也不连接 Android 设备。它们不能替代真实设备上的输入、固件和权限验证。
 
-`build.gradle` 声明 Java 11 源码与字节码兼容性。仓库没有 Gradle Wrapper。现有测试位于 `tests/`，通过 `main` 方法执行，默认 `gradle test` 不会运行这些测试。完整回归请使用上面的命令。
+`build.gradle` 声明 Java 11 源码与字节码兼容性，并用 JUnit 4 适配器运行同一组测试。使用固定的 Gradle 8.9 执行 `gradle test`；在官方客户端工作区中执行 `./gradlew :core:test`。测试依赖使用该 Gradle 发行包自带的 JUnit 4.13.2 与 Hamcrest 1.3，版本和 SHA-256 固定在 `gradle/test-libraries.properties`，不从网络解析依赖。核心仓库没有单独的 Wrapper。
+
+官方客户端还提供 `python3 tools/test_core_junit.py`，可直接用缓存中的真实 JUnit 运行十套测试。该入口通过不代表 Gradle 后台进程已在当前环境运行成功。
 
 ## 集成与权限边界
 

@@ -1,2 +1,43 @@
 plugins { id 'java-library' }
 java { sourceCompatibility = JavaVersion.VERSION_11; targetCompatibility = JavaVersion.VERSION_11 }
+
+// Gradle 8.9 ships these exact JUnit jars. Tests use that verified local copy,
+// so an offline checkout does not need Maven resolution or vendored binaries.
+def testLibraries = new Properties()
+file('gradle/test-libraries.properties').withInputStream { testLibraries.load(it) }
+def testJars = ['junit', 'hamcrest'].collect { key ->
+    new File(gradle.gradleHomeDir, 'lib/' + testLibraries.getProperty(key + '.file'))
+}
+
+sourceSets.test.java.srcDirs = ['tests', 'src/test/java']
+dependencies { testImplementation files(testJars) }
+
+tasks.register('verifyTestLibraries') {
+    doLast {
+        if (gradle.gradleVersion != testLibraries.getProperty('gradle.version')) {
+            throw new GradleException('Core tests require the pinned Gradle 8.9 distribution.')
+        }
+        ['junit', 'hamcrest'].eachWithIndex { key, index ->
+            def jar = testJars[index]
+            if (!jar.isFile()) throw new GradleException('Missing bundled test dependency: ' + jar)
+            def digest = java.security.MessageDigest.getInstance('SHA-256').digest(jar.bytes).encodeHex().toString()
+            if (digest != testLibraries.getProperty(key + '.sha256')) {
+                throw new GradleException('Unexpected bundled test dependency content: ' + jar)
+            }
+            new java.util.jar.JarFile(jar).withCloseable { archive ->
+                if (archive.manifest.mainAttributes.getValue('Implementation-Version') != testLibraries.getProperty(key + '.version')) {
+                    throw new GradleException('Unexpected bundled test dependency version: ' + jar)
+                }
+            }
+        }
+    }
+}
+
+tasks.named('compileTestJava') { dependsOn tasks.named('verifyTestLibraries') }
+tasks.named('test') {
+    useJUnit()
+    // Existing main-based suites are called by this adapter, not discovered twice.
+    include '**/CoreBehaviorTest.class'
+    systemProperty 'panel.snapshot', file('tests/fixtures/panel-thor-default.txt').absolutePath
+    inputs.file('tests/fixtures/panel-thor-default.txt')
+}
