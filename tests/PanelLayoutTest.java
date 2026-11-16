@@ -73,6 +73,28 @@ public final class PanelLayoutTest {
                         "layered keyboard retains 48dp keys");
             }
         }
+        if (layout.fullKeyboard) {
+            PanelLayout.Rect previousRow = null;
+            float rowGap = -1;
+            int rowCount = 0;
+            for (PanelLayout.Key key : layout.keys) {
+                if (previousRow != null && Math.abs(key.bounds.top - previousRow.top) < .01f)
+                    continue;
+                if (previousRow == null) {
+                    near(key.bounds.top, layout.content.top, "keyboard starts at content top");
+                } else {
+                    float currentGap = key.bounds.top - previousRow.bottom;
+                    check(currentGap >= 3.99f, "keyboard rows retain their minimum gap");
+                    if (rowGap >= 0)
+                        near(currentGap, rowGap, "keyboard rows are evenly spaced");
+                    rowGap = currentGap;
+                }
+                previousRow = key.bounds;
+                rowCount++;
+            }
+            check(rowCount == 6, "full keyboard keeps six rows");
+            near(previousRow.bottom, layout.content.bottom, "last keyboard row reaches content bottom");
+        }
         for (int i = 0; i < targets.size(); i++) {
             for (int j = i + 1; j < targets.size(); j++) {
                 check(!overlaps(targets.get(i), targets.get(j)), "overlapping targets " + layout.snapshot());

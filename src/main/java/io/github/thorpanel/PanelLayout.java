@@ -433,6 +433,8 @@ final class PanelLayout {
             if (width >= 500 && keyboardWidth >= fullWidth() && content.height() >= fullHeight) {
                 fullKeyboard = true;
                 float left = content.centerX() - keyboardWidth / 2;
+                // Keep square keycaps and distribute spare height between the rows.
+                float rowGap = FULL_KEY_GAP + (content.height() - fullHeight) / (FULL.length - 1);
                 float y = content.top;
                 for (int r = 0; r < FULL.length; r++) {
                     KeySpec[] row = FULL[r];
@@ -443,7 +445,7 @@ final class PanelLayout {
                                 new Rect(x, y, x + unit * key.weight, y + unit)));
                         x += unit * key.weight + FULL_KEY_GAP;
                     }
-                    y += unit + FULL_KEY_GAP;
+                    y += unit + rowGap;
                 }
                 usable = true;
                 return;
