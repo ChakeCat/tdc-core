@@ -148,6 +148,13 @@ public final class InteractionTest {
         check(!ImeWindowState.hasLowerKeys(popup.replace(" u0 InputMethod}"," u0 AppDialog}"),id),"ordinary app popup is not IME keys");
         check(!ImeWindowState.hasLowerKeys(popup.replace("mDisplayId=4 ","mDisplayId=0 "),id),"upper floating keys do not validate lower output");
         check(ImeWindowState.hasLowerKeys(shown,id),"dual-screen Presentation remains supported");
+        check(ImeWindowState.hasLowerFloatingKeys(shown,id,4),"Presentation can validate a separate keyboard surface");
+        check(ImeWindowState.hasLowerFloatingKeys(popup,id,4),"attached popup can validate a separate keyboard surface");
+        check(!ImeWindowState.hasLowerFloatingKeys(nav.replace("[0,968]","[0,305]"),id,4),"standard IME window needs compositor proof even with full content insets");
+        check(!ImeWindowState.hasLowerFloatingKeys(popup,id,0),"floating fallback keeps display isolation");
+        check(!ImeWindowState.hasLowerFloatingKeys(popup,"other/.Ime",4),"floating fallback keeps owner isolation");
+        check(!ImeWindowState.hasLowerFloatingKeys(popup.replace("isVisible=true","isVisible=false"),id,4),"hidden popup is not a floating fallback");
+        check(!ImeWindowState.hasLowerFloatingKeys(null,id,4),"missing window data is not a floating fallback");
 
     }
     private static void imeConnectionTests(){

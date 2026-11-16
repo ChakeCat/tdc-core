@@ -9,6 +9,14 @@ final class ImeWindowState {
         return hasLowerKeys(dump, imeId, 4);
     }
     static boolean hasLowerKeys(String dump, String imeId, int displayId) {
+        return hasLowerKeys(dump, imeId, displayId, true);
+    }
+    /** Separate windows can display keys even when the standard IME surface stays empty. */
+    static boolean hasLowerFloatingKeys(String dump, String imeId, int displayId) {
+        return hasLowerKeys(dump, imeId, displayId, false);
+    }
+    private static boolean hasLowerKeys(
+            String dump, String imeId, int displayId, boolean includeMainWindow) {
         if (dump == null || imeId == null || !imeId.contains("/") || displayId < 0)
             return false;
         String marker = "mDisplayId=" + displayId + " ";
@@ -25,7 +33,7 @@ final class ImeWindowState {
                     && window.contains("mParentWindow=Window{")
                     && window.contains(" u0 InputMethod}"))
                 return true;
-            if (!window.contains("ty=INPUT_METHOD "))
+            if (!includeMainWindow || !window.contains("ty=INPUT_METHOD "))
                 continue;
             java.util.regex.Matcher height =
                     java.util.regex.Pattern.compile("Requested w=\\d+ h=(\\d+)").matcher(window);
