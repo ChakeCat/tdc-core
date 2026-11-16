@@ -200,8 +200,18 @@ public final class InteractionTest {
                 "composed navigation strip cannot validate an uncomposed floating keyboard");
         check(ImeSurfaceState.visible(mainOutput, mainWindow.replace("[0,955]", "[0,300]") + window, ime, 7),
                 "independently usable main keyboard can validate composition beside a stale popup");
-        check(ImeSurfaceState.visible(output.replace(name, "InputMethod"), null, ime, 7),
-                "standard IME composition keeps its existing independent proof");
+        check(!ImeSurfaceState.visible(mainOutput, mainWindow, ime, 7),
+                "navigation-only main surface remains invalid after the floating window disappears");
+        check(ImeSurfaceState.visible(mainOutput, mainWindow.replace("[0,955]", "[0,300]"), ime, 7),
+                "main keyboard needs both its own key area and composed surface");
+        for (String invalidMain : new String[]{null, "", mainWindow.replace("package=keyboard", "package=other"),
+                mainWindow.replace("mDisplayId=7", "mDisplayId=0"),
+                mainWindow.replace("mGivenContentInsets=", "unknownContentInsets=")}) {
+            check(!ImeSurfaceState.visible(mainOutput, invalidMain, ime, 7),
+                    "missing or unrelated main keyboard geometry cannot validate navigation");
+        }
+        check(ImeSurfaceState.visible(mainOutput, 7),
+                "legacy surface-only query retains its independent composition semantics");
         String hidden = window.replace("isVisible=true", "isVisible=false");
         String foreign = window.replace("package=keyboard", "package=other");
         check(!ImeSurfaceState.visible(output, hidden + foreign, ime, 7),

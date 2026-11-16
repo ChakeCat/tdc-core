@@ -11,10 +11,9 @@ final class ImeSurfaceState {
         return visible(dump, display, java.util.Collections.emptySet(), true);
     }
     static boolean visible(String dump, String windows, String imeId, int display) {
-        // A floating keyboard can leave a composed navigation strip in the main IME window.
-        // That strip must not validate its uncomposed child keyboard.
-        boolean mainKeys = !ImeWindowState.hasLowerFloatingKeys(windows, imeId, display)
-                || ImeWindowState.hasLowerMainKeys(windows, imeId, display);
+        // The main surface can contain only navigation, even after a floating window closes.
+        // Require its own key area independently of any floating-window candidates.
+        boolean mainKeys = ImeWindowState.hasLowerMainKeys(windows, imeId, display);
         return visible(dump, display,
                 ImeWindowState.floatingSurfaceNames(windows, imeId, display), mainKeys);
     }
