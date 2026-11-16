@@ -124,7 +124,59 @@ public final class PanelLayoutTest {
         return result;
     }
 
+    private static void viewportEnvelope(PanelLayout value) {
+        List<PanelLayout.Rect> regions = new ArrayList<>();
+        for (PanelLayout.Rect region : new PanelLayout.Rect[]{value.title, value.status,
+                value.settings, value.option, value.exit, value.content, value.pad,
+                value.leftButton, value.rightButton, value.speedButton, value.imeButton,
+                value.pageBack, value.pageNext, value.pageIndicator}) add(regions, region);
+        for (PanelLayout.Rect region : value.modes) add(regions, region);
+        for (PanelLayout.Rect region : value.layerTabs) add(regions, region);
+        for (PanelLayout.Key key : value.keys) add(regions, key.bounds);
+        for (PanelLayout.Rect region : regions) {
+            check(Float.isFinite(region.left) && Float.isFinite(region.top)
+                    && Float.isFinite(region.right) && Float.isFinite(region.bottom),
+                    "responsive layout has finite drawing coordinates");
+            check(region.left >= 0 && region.top >= 0 && region.right <= value.width + .01f
+                    && region.bottom <= value.height + .01f,
+                    "every drawn region remains inside the measured safe viewport");
+        }
+        if (!value.usable) check(value.keys.isEmpty() && value.pad.isEmpty(),
+                "insufficient safe space does not expose partial input surfaces");
+    }
+
+    private static void responsiveViewports() {
+        // Pixels are examples of measured windows, never device selectors. Insets can change
+        // independently of the window and can temporarily cover its entire height.
+        for (int[] pixels : new int[][]{{1280,960},{1920,1080},{1227,799},{800,600}}) {
+            for (float density : new float[]{1,1.5f,2,369f/160f}) {
+                for (int rotation : new int[]{0,1}) {
+                    float width = (pixels[rotation] - 73 - 47) / density;
+                    float height = (pixels[1-rotation] - 31 - 13) / density;
+                    for (float fraction : new float[]{0,.25f,.5f,.8f,1,1.2f}) {
+                        float available = Math.max(0,height*(1-fraction));
+                        for (float font : new float[]{1,1.3f,2}) {
+                            for (int mode=0; mode<3; mode++) {
+                                PanelLayout value = PanelLayout.create(width,available,font,mode,
+                                        false,fraction>0,PanelLayout.FUNCTIONS,999);
+                                viewportEnvelope(value);
+                                if (mode==2 && fraction>0) check(value.pad.isEmpty(),
+                                        "visible input method owns the remaining text-entry area");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Reflow boundaries must not introduce a one-pixel overflow at fractional dp sizes.
+        for (float width : new float[]{319.5f,499.5f,500,599.5f,600,699.5f,700,839.5f,840})
+            for (float height : new float[]{35.5f,95.5f,107.5f,131.5f,199.5f,279.5f,479.5f,640})
+                for (int mode=0; mode<3; mode++)
+                    viewportEnvelope(PanelLayout.create(width,height,1.5f,mode,false,true,0,0));
+    }
+
     public static void main(String[] args) throws Exception {
+        responsiveViewports();
         for (int width : new int[]{320, 360, 411, 600, 840}) {
             for (int height : new int[]{180, 280, 360, 480, 640, 900}) {
                 for (float scale : new float[]{1, 1.3f, 1.5f, 2}) {

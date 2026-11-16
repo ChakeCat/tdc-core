@@ -157,6 +157,60 @@ public final class InteractionTest {
         check(!ImeWindowState.hasLowerFloatingKeys(null,id,4),"missing window data is not a floating fallback");
 
     }
+    private static String keyboardFrame(String type, int display, String bounds) {
+        return "\n  Window #0 Window{keys u0 InputMethod}:\n"
+            +"    mDisplayId="+display+" rootTaskId=1\n    package=keyboard appop=NONE\n"
+            +"    mAttrs={ty="+type+" }\n    mParentWindow=Window{parent u10 InputMethod}\n"
+            +"    Surface: shown=true layer=0 alpha=1.0\n    mDrawState=HAS_DRAWN\n    isVisible=true\n"
+            +"    Frames: parent=[0,0][2000,2000] display=[0,0][2000,2000] frame="+bounds
+            +" last=[-50,0][3000,2000] insetsChanged=false\n";
+    }
+    private static void imeHorizontalBoundsTests() {
+        String ime="keyboard/.Ime";
+        ImeWindowState.HorizontalBounds fits=ImeWindowState.HorizontalBounds.FITS;
+        ImeWindowState.HorizontalBounds overflow=ImeWindowState.HorizontalBounds.OVERFLOW;
+        ImeWindowState.HorizontalBounds unknown=ImeWindowState.HorizontalBounds.UNKNOWN;
+        for(String type:new String[]{"INPUT_METHOD","PRESENTATION","APPLICATION_ATTACHED_DIALOG"}) {
+            String window=keyboardFrame(type,7,"[0,100][640,400]");
+            check(ImeWindowState.horizontalBounds(window,ime,7,640)==fits,"visible keyboard outer frame fits exactly: "+type);
+            check(ImeWindowState.horizontalBounds(window.replace("\n","\r\n"),ime,7,640)==fits,"Android 13/16 Frames dump accepts CRLF: "+type);
+            check(ImeWindowState.horizontalBounds(window.replace("frame=[0,100]","frame=[-1,100]"),ime,7,640)==overflow,"negative left is explicit horizontal overflow: "+type);
+            check(ImeWindowState.horizontalBounds(window,ime,7,639)==overflow,"right edge beyond current width is explicit overflow: "+type);
+            for(int width:new int[]{320,500,640,800,1280})
+                check(ImeWindowState.horizontalBounds(window,ime,7,width)==(width<640?overflow:fits),"frame is compared with each current width, independent of density or preset dimensions");
+            String absentFrame=window.replace("Frames:","OtherFrames:");
+            check(ImeWindowState.horizontalBounds(absentFrame,ime,7,640)==unknown,"unrelated frame sections are not the window's outer frame");
+            for(String invalid:new String[]{"[0,100][0,400]","[640,100][0,400]","[0,400][640,100]",
+                    "[0,100][2147483648,400]","[-2147483649,100][640,400]","[0,999999999999999][640,400]","[]"})
+                check(ImeWindowState.horizontalBounds(keyboardFrame(type,7,invalid),ime,7,640)==unknown,"missing, empty or numerically invalid geometry remains unknown");
+            check(ImeWindowState.horizontalBounds(keyboardFrame(type,7,"[-2147483648,100][640,400]"),ime,7,640)==overflow,"minimum valid coordinate cannot overflow arithmetic");
+        }
+        String good=keyboardFrame("INPUT_METHOD",7,"[0,100][640,400]");
+        String wide=keyboardFrame("INPUT_METHOD",7,"[0,100][1280,400]");
+        for(String other:new String[]{wide.replace("package=keyboard ","package=keyboard.other "),
+                wide.replace("mDisplayId=7 ","mDisplayId=70 "),wide.replace("isVisible=true","isVisible=false"),
+                wide.replace("mDrawState=HAS_DRAWN","mDrawState=DRAW_PENDING"),wide.replace("Surface: shown=true","Surface: shown=false"),
+                wide.replace("ty=INPUT_METHOD ","ty=APPLICATION "),
+                keyboardFrame("APPLICATION_ATTACHED_DIALOG",7,"[0,100][1280,400]").replace("u10 InputMethod}","u10 AppDialog}")}) {
+            check(ImeWindowState.horizontalBounds(other,ime,7,640)==unknown,"foreign display/owner, hidden or ordinary app frame is excluded");
+            check(ImeWindowState.horizontalBounds(good+other,ime,7,640)==fits,"unrelated oversized window cannot invalidate current keyboard");
+        }
+        check(ImeWindowState.horizontalBounds(good+wide,ime,7,640)==overflow,"one oversized current keyboard window prevents false success");
+        check(ImeWindowState.horizontalBounds(good+wide.replace("Frames:","OtherFrames:"),ime,7,640)==unknown,"a missing current keyboard frame is not proved fitting by another window");
+        String hidden=wide.replace("isVisible=true","isVisible=false");
+        String foreign=wide.replace("package=keyboard ","package=other ");
+        check(ImeWindowState.horizontalBounds(hidden+foreign,ime,7,640)==unknown,"identity and visibility from separate windows are never combined");
+        check(ImeWindowState.horizontalBounds(good.replace("frame=[0,100][640,400]","frame=[0,100][400,400]"),ime,7,480)==fits,"resized window fits after rotation");
+        check(ImeWindowState.horizontalBounds(good,ime,7,480)==overflow,"old landscape window cannot pass after narrower rotation");
+        check(ImeWindowState.horizontalBounds(good,ime,7,960)==fits,"same outer frame remains valid after wider rotation");
+        for(String dump:new String[]{null,"",good.replace("Frames:","Unknown:")})
+            check(ImeWindowState.horizontalBounds(dump,ime,7,640)==unknown,"missing frame data remains unknown");
+        for(String id:new String[]{null,"", "keyboard", "/Ime", "other/.Ime"})
+            check(ImeWindowState.horizontalBounds(good,id,7,640)==unknown,"missing or unrelated input method cannot claim a frame");
+        check(ImeWindowState.horizontalBounds(good,ime,7,0)==unknown,"zero display width remains unknown");
+        check(ImeWindowState.horizontalBounds(good,ime,7,-1)==unknown,"negative display width remains unknown");
+        check(ImeWindowState.horizontalBounds(good,ime,-1,640)==unknown,"missing display id remains unknown");
+    }
     private static void imeConnectionTests(){
         String ime="com.tencent.wetype/.plugin.hld.WxHldService",editor="com.netease.uuremote";
         String ready="  mCurClient=ClientState{e162e45 uid=10151 pid=32438 displayId=0} mCurSeq=2609\n"
@@ -395,5 +449,5 @@ public final class InteractionTest {
         check(!InputRoutePolicy.explicitExternalChoice(null, beta),
                 "unavailable input method is not a manual beta choice");
     }
-    public static void main(String[] args){padTests();modifierTests();imeWindowTests();imeConnectionTests();android16ImeTests();routeTests();dockVisibilityTests();setupTests();deviceIdentityTests();System.out.println("Passed "+checks+" interaction checks");}
+    public static void main(String[] args){padTests();modifierTests();imeWindowTests();imeHorizontalBoundsTests();imeConnectionTests();android16ImeTests();routeTests();dockVisibilityTests();setupTests();deviceIdentityTests();System.out.println("Passed "+checks+" interaction checks");}
 }
