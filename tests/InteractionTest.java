@@ -185,6 +185,86 @@ public final class InteractionTest {
         check(!ImeConnectionState.ready(ready.substring(0,ready.indexOf("\nInput method service")),ime,editor,0,4),"missing service dump is not success");
         check(!ImeConnectionState.ready(null,ime,editor,0,4),"unavailable state is not success");
     }
+
+    private static String android16Ime(int user, int editorDisplay, int keyboardDisplay, String editor) {
+        // Shape from AOSP android16-release IMMS/BindingController/InputMethodService dumps.
+        return "  UserId="+user+"\n"
+            +"    mBindingController:\n"
+            +"      mSelectedMethodId=keyboard/.Ime\n"
+            +"      mCurId=keyboard/.Ime\n"
+            +"      mHasMainConnection=true\n"
+            +"      mVisibleBound=true\n"
+            +"      mCurTokenDisplayId="+keyboardDisplay+"\n"
+            +"    mCurClient=ClientState{e162e45 mUid=10151 mPid=32438 mSelfReportedDisplayId="+editorDisplay+"}\n"
+            +"    mImeBindingState:\n"
+            +"      mFocusedWindow=android.os.BinderProxy@acb\n"
+            +"    mBoundToMethod=true\n"
+            +"    Input Methods:\n"
+            +"      InputMethod #0:\n"
+            +"        mId=keyboard/.Ime\n"
+            +"Input method client state for android.view.inputmethod.InputMethodManager@eea:\n"
+            +"  mCurRootView=android.view.ViewRootImpl@abc\n"
+            +"Input method service state for keyboard.Ime@abc:\n"
+            +"  mStartedInputConnection=RemoteInputConnection{idHash=#ff}\n"
+            +"  mInputStarted=true mInputViewStarted=true\n"
+            +"  mInputEditorInfo:\n"
+            +"    packageName="+editor+" fieldId=1\n";
+    }
+    private static void android16ImeTests() {
+        String ime="keyboard/.Ime", editor="remote.app";
+        String header="Input Method Manager Service state:\n  mCurrentImeUserId=0\n"
+            +"  mUserDataRepository:\n    userId=10\n      curClient=ClientState{old mSelfReportedDisplayId=4}\n"
+            +"      curEditorInfo:\n        packageName=old.app\n"
+            +"  mStartInputHistory:\n    packageName=old.app\n";
+        String current=android16Ime(0,0,2,editor), ready=header+current;
+        check(ImeConnectionState.ready(ready,ime,editor,0,2),"Android16 current user binding, client and IME service agree");
+        check(ImeConnectionState.editorDisplay(ready)==0,"Android16 current client uses self-reported display id");
+        check(ImeConnectionState.ready(ready.replace("\n","\r\n"),ime,editor,0,2),"Android16 CRLF dump is accepted");
+        check(!ImeConnectionState.ready(ready,ime,editor,2,0),"Android16 reversed screen request cannot borrow correct pair");
+        check(ImeConnectionState.ready(header+android16Ime(0,2,0,editor),ime,editor,2,0),"parser does not hard-code either display role");
+        for(String[] replacement:new String[][]{
+            {"mCurId=keyboard/.Ime","mCurId=other/.Ime"},
+            {"mHasMainConnection=true","mHasMainConnection=false"},
+            {"mBoundToMethod=true","mBoundToMethod=false"},
+            {"mCurTokenDisplayId=2","mCurTokenDisplayId=0"},
+            {"mSelfReportedDisplayId=0","mSelfReportedDisplayId=2"},
+            {"mInputStarted=true","mInputStarted=false"},
+            {"mStartedInputConnection=RemoteInputConnection{idHash=#ff}","mStartedInputConnection=null"},
+            {"packageName=remote.app","packageName=remote.app.other"},
+            {"mBindingController:","missingController:"},
+            {"mCurrentImeUserId=0","mCurrentImeUserId=10"},
+            {"mCurrentImeUserId=0","mCurrentImeUserId=999999999999999999999"},
+            {"mCurTokenDisplayId=2","mCurTokenDisplayId=999999999999999999999"},
+            {"mSelfReportedDisplayId=0","mSelfReportedDisplayId=999999999999999999999"},
+            {"  UserId=0","  UserId=999999999999999999999"}}) {
+            check(!ImeConnectionState.ready(ready.replace(replacement[0],replacement[1]),ime,editor,0,2),
+                "Android16 rejects absent/mismatched active evidence: "+replacement[0]);
+        }
+        check(ImeConnectionState.editorDisplay(ready.replace("mSelfReportedDisplayId=0","mSelfReportedDisplayId=999999999999999999999"))==-1,"oversized editor ids do not throw");
+        check(!ImeConnectionState.ready(current,ime,editor,0,2),"modern per-user dump requires current user marker");
+        check(ImeConnectionState.editorDisplay(header)==-1,"header repository does not become current client");
+        check(!ImeConnectionState.ready(header,ime,editor,0,2),"header and history alone do not prove input");
+        String other=android16Ime(10,4,4,"other.app");
+        check(ImeConnectionState.ready(header+other+current,ime,editor,0,2),"current user can follow another complete user block");
+        check(ImeConnectionState.ready(header+current+other,ime,editor,0,2),"later user block does not pollute current service");
+        check(ImeConnectionState.editorDisplay(header+other+current)==0,"capture ignores other user's client");
+        check(ImeConnectionState.editorDisplay((header+current+other).replace("mCurrentImeUserId=0","mCurrentImeUserId=10"))==4,"capture selects explicitly current user");
+        check(!ImeConnectionState.ready(header+other+current.replace("mHasMainConnection=true","mHasMainConnection=false"),ime,editor,0,2),"other user binding cannot complete current user");
+        check(!ImeConnectionState.ready(header+current.replace("packageName=remote.app","packageName=other.app")+android16Ime(10,0,2,editor),ime,editor,0,2),"other user's service cannot complete current user");
+        check(!ImeConnectionState.ready(header+current.substring(0,current.indexOf("Input method service state"))+android16Ime(10,0,2,editor),ime,editor,0,2),"missing current service does not consume later service");
+        check(!ImeConnectionState.ready(header+current+current,ime,editor,0,2),"duplicate active-user blocks are ambiguous");
+        check(ImeConnectionState.editorDisplay(header+current+current)==-1,"duplicate active-user blocks cannot select an editor");
+        check(!ImeConnectionState.ready(ready.replace("mCurTokenDisplayId=2","mCurTokenDisplayId=2\n      mCurTokenDisplayId=2"),ime,editor,0,2),"duplicate binding fields are ambiguous");
+        check(!ImeConnectionState.ready(ready.replace("mBoundToMethod=true","mBoundToMethod=true\n    mBoundToMethod=false"),ime,editor,0,2),"conflicting binding values are rejected");
+        check(!ImeConnectionState.ready(ready.replace("mCurrentImeUserId=0","mCurrentImeUserId=0\n  mCurrentImeUserId=10"),ime,editor,0,2),"ambiguous current-user marker is rejected");
+        check(!ImeConnectionState.ready(ready+current.substring(current.indexOf("Input method service state")),ime,editor,0,2),"duplicate service snapshots cannot be combined");
+        String missingClient=current.replace("    mCurClient=ClientState{e162e45 mUid=10151 mPid=32438 mSelfReportedDisplayId=0}","    mCurClient=null");
+        check(ImeConnectionState.editorDisplay(header+missingClient+android16Ime(10,0,2,editor))==-1,"null active client does not use another user's client");
+        check(!ImeConnectionState.ready(header+missingClient+android16Ime(10,0,2,editor),ime,editor,0,2),"null active client cannot borrow other user binding");
+        check(!ImeConnectionState.ready(ready,ime,editor,-1,2)&&!ImeConnectionState.ready(ready,ime,editor,0,-1),"negative expected display ids are rejected");
+        check(ImeConnectionState.editorDisplay(ready.replace("    mCurClient=", "    mCurClient=null\n    mCurClient="))==-1,"duplicate null and live current clients are ambiguous");
+    }
+
     private static void routeTests(){
         String wechat="com.tencent.wetype/.plugin.hld.WxHldService";
         InputRoutePolicy p=new InputRoutePolicy(false);
@@ -315,5 +395,5 @@ public final class InteractionTest {
         check(!InputRoutePolicy.explicitExternalChoice(null, beta),
                 "unavailable input method is not a manual beta choice");
     }
-    public static void main(String[] args){padTests();modifierTests();imeWindowTests();imeConnectionTests();routeTests();dockVisibilityTests();setupTests();deviceIdentityTests();System.out.println("Passed "+checks+" interaction checks");}
+    public static void main(String[] args){padTests();modifierTests();imeWindowTests();imeConnectionTests();android16ImeTests();routeTests();dockVisibilityTests();setupTests();deviceIdentityTests();System.out.println("Passed "+checks+" interaction checks");}
 }
