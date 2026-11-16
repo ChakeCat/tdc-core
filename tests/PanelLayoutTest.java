@@ -62,12 +62,12 @@ public final class PanelLayoutTest {
         for (PanelLayout.Rect mode : layout.modes)
             check(mode.height() >= PanelLayout.HEADER_TARGET - .01f, "mode tab height");
         for (PanelLayout.Key key : layout.keys) {
-            if ((key.code >= 29 && key.code <= 54) || (key.code >= 7 && key.code <= 16)
-                    || (key.code >= 68 && key.code <= 76) || key.code == 55 || key.code == 56)
-                near(key.bounds.height(), key.bounds.width(), "ordinary keys are square: " + key.label);
             if (layout.fullKeyboard) {
                 check(key.bounds.width() + .01f >= key.label.length() * layout.keyTextSp * layout.fontScale * .64f + 8,
                         "full keyboard label fits: " + key.label);
+                near(key.bounds.height(), layout.keys.get(0).bounds.height(), "full keyboard uses a uniform height");
+                check(key.bounds.height() + .01f >= layout.keyTextSp * layout.fontScale * 1.4f + 12,
+                        "full keyboard keeps room above and below its labels");
             } else {
                 check(key.bounds.width() >= 47.99f && key.bounds.height() >= 47.99f,
                         "layered keyboard retains 48dp keys");
@@ -75,7 +75,6 @@ public final class PanelLayoutTest {
         }
         if (layout.fullKeyboard) {
             PanelLayout.Rect previousRow = null;
-            float rowGap = -1;
             int rowCount = 0;
             for (PanelLayout.Key key : layout.keys) {
                 if (previousRow != null && Math.abs(key.bounds.top - previousRow.top) < .01f)
@@ -84,16 +83,13 @@ public final class PanelLayoutTest {
                     near(key.bounds.top, layout.content.top, "keyboard starts at content top");
                 } else {
                     float currentGap = key.bounds.top - previousRow.bottom;
-                    check(currentGap >= 3.99f, "keyboard rows retain their minimum gap");
-                    if (rowGap >= 0)
-                        near(currentGap, rowGap, "keyboard rows are evenly spaced");
-                    rowGap = currentGap;
+                    near(currentGap, 4, "keyboard rows keep compact spacing");
                 }
                 previousRow = key.bounds;
                 rowCount++;
             }
             check(rowCount == 6, "full keyboard keeps six rows");
-            near(previousRow.bottom, layout.content.bottom, "last keyboard row reaches content bottom");
+            check(previousRow.bottom <= layout.content.bottom + .01f, "last keyboard row fits the content");
         }
         for (int i = 0; i < targets.size(); i++) {
             for (int j = i + 1; j < targets.size(); j++) {
@@ -164,7 +160,7 @@ public final class PanelLayoutTest {
         check(layout(840,280,1,0,0,0).modes[0].top == layout(840,280,1,0,0,0).settings.top,
                 "wide short mode tabs share header row");
         PanelLayout giant = layout(1600,1400,1,1,0,0);
-        for (PanelLayout.Key key : giant.keys) check(key.bounds.height() <= 80.01f, "large screen square key height stays bounded");
+        for (PanelLayout.Key key : giant.keys) check(key.bounds.height() <= 59.01f, "large screen key height stays compact");
         float min = Float.MAX_VALUE, max = 0;
         for (PanelLayout.Key key : giant.keys) {
             min = Math.min(min, key.bounds.left);
@@ -183,6 +179,10 @@ public final class PanelLayoutTest {
         near(thor.width, 537.6694f, "Thor width");
         near(thor.height, 444.4444f, "Thor height");
         near(thor.content.top, 96, "Thor compact header snapshot");
+        check(thor.keys.get(0).bounds.height() >= 48 && thor.keys.get(0).bounds.height() <= 50,
+                "Thor keys are slightly shorter than the original 53dp rectangles");
+        check(thor.content.bottom - thor.keys.get(thor.keys.size() - 1).bounds.bottom < 30,
+                "Thor compact keyboard leaves only a small bottom margin");
         check(thor.pageCount == 1 && thor.layerTabs.length == 0 && thor.pageBack.isEmpty()
                 && thor.pageNext.isEmpty(), "full keyboard does not need layers or pages");
         check(thor.keys.size() == expected.size(), "all keys visible at once on Thor");

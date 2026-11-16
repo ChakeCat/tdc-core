@@ -15,7 +15,7 @@ final class PanelLayout {
     static final float MIN_TARGET = 48f;
     static final float HEADER_TARGET = 36f;
     static final float FULL_KEY_WIDTH = 28f;
-    static final float FULL_KEY_HEIGHT = 28f;
+    static final float FULL_KEY_HEIGHT = 32f;
     private static final float MARGIN = 12f;
     private static final float GAP = 6f;
     private static final float FULL_KEY_GAP = 4f;
@@ -205,11 +205,6 @@ final class PanelLayout {
         return Float.isFinite(value) && value > 0 ? value : 0;
     }
 
-    private static boolean squareKey(int code) {
-        return (code >= 29 && code <= 54) || (code >= 7 && code <= 16)
-                || (code >= 68 && code <= 76) || code == 55 || code == 56;
-    }
-
     private static KeySpec k(int code, String label) {
         return k(code, label, 1);
     }
@@ -226,7 +221,7 @@ final class PanelLayout {
                     k(67, "⌫", 1.6f)},
             {k(61, "Tab", 1.5f), k(45, "Q"), k(51, "W"), k(33, "E"), k(46, "R"), k(48, "T"),
                     k(53, "Y"), k(49, "U"), k(37, "I"), k(43, "O"), k(44, "P"), k(71, "["),
-                    k(72, "]"), k(73, "\\")},
+                    k(72, "]"), k(73, "\\", 1.1f)},
             {k(115, "Caps", 1.6f), k(29, "A"), k(47, "S"), k(32, "D"), k(34, "F"), k(35, "G"),
                     k(36, "H"), k(38, "J"), k(39, "K"), k(40, "L"), k(74, ";"), k(75, "'"),
                     k(66, "Enter", 2)},
@@ -405,7 +400,7 @@ final class PanelLayout {
         float fullWidth() {
             float required = 0;
             for (KeySpec[] row : FULL) {
-                float unit = Math.max(FULL_KEY_WIDTH, keyTextSp * fontScale * 1.4f + 12);
+                float unit = FULL_KEY_WIDTH;
                 float weights = 0;
                 for (KeySpec key : row) {
                     float label = key.label.length() * keyTextSp * fontScale * .64f + 8;
@@ -421,31 +416,29 @@ final class PanelLayout {
             if (width < 700)
                 keyTextSp = 12f;
             float keyboardWidth = Math.min(content.width(), Math.max(1000f, fullWidth()));
-            float[] rowHeights = new float[FULL.length];
-            float fullHeight = FULL_KEY_GAP * (FULL.length - 1);
-            for (int r = 0; r < FULL.length; r++) {
-                float weights = 0;
-                for (KeySpec key : FULL[r])
-                    weights += key.weight;
-                rowHeights[r] = (keyboardWidth - FULL_KEY_GAP * (FULL[r].length - 1)) / weights;
-                fullHeight += rowHeights[r];
-            }
-            if (width >= 500 && keyboardWidth >= fullWidth() && content.height() >= fullHeight) {
+            float minimumHeight = Math.max(FULL_KEY_HEIGHT, keyTextSp * fontScale * 1.4f + 12);
+            if (width >= 500 && keyboardWidth >= fullWidth()
+                    && content.height() >= minimumHeight * FULL.length + FULL_KEY_GAP * (FULL.length - 1)) {
                 fullKeyboard = true;
+                float fittedHeight = Math.min(Math.max(minimumHeight, 64f),
+                        (content.height() - FULL_KEY_GAP * (FULL.length - 1)) / FULL.length);
+                // Slightly shorten the fitted rectangle without reducing its minimum target.
+                float keyHeight = Math.max(minimumHeight, fittedHeight * .92f);
                 float left = content.centerX() - keyboardWidth / 2;
-                // Keep square keycaps and distribute spare height between the rows.
-                float rowGap = FULL_KEY_GAP + (content.height() - fullHeight) / (FULL.length - 1);
                 float y = content.top;
                 for (int r = 0; r < FULL.length; r++) {
                     KeySpec[] row = FULL[r];
-                    float unit = rowHeights[r];
+                    float weights = 0;
+                    for (KeySpec key : row)
+                        weights += key.weight;
+                    float unit = (keyboardWidth - FULL_KEY_GAP * (row.length - 1)) / weights;
                     float x = left;
                     for (KeySpec key : row) {
                         keys.add(new Key(key.code, key.label,
-                                new Rect(x, y, x + unit * key.weight, y + unit)));
+                                new Rect(x, y, x + unit * key.weight, y + keyHeight)));
                         x += unit * key.weight + FULL_KEY_GAP;
                     }
-                    y += unit + rowGap;
+                    y += keyHeight + FULL_KEY_GAP;
                 }
                 usable = true;
                 return;
@@ -510,10 +503,6 @@ final class PanelLayout {
                 float keyWidth = (content.width() - gap * (columns - 1)) / columns;
                 float x = content.left + (index % columns) * (keyWidth + gap);
                 float keyY = y + (index / columns) * (target + gap);
-                if (squareKey(values[i].code)) {
-                    x += (keyWidth - target) / 2;
-                    keyWidth = target;
-                }
                 keys.add(new Key(values[i].code, values[i].label,
                         new Rect(x, keyY, x + keyWidth, keyY + target)));
             }
