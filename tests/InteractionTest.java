@@ -157,6 +157,59 @@ public final class InteractionTest {
         check(!ImeWindowState.hasLowerFloatingKeys(null,id,4),"missing window data is not a floating fallback");
 
     }
+    private static void imeFloatingCompositionTests() {
+        String ime = "keyboard/.Ime", name = "PopupWindow:48d934c";
+        String window = keyboardFrame("APPLICATION_ATTACHED_DIALOG", 7, "[0,389][620,934]")
+                .replace("u10 InputMethod", "u0 InputMethod")
+                + "    mSurface=Surface(name=" + name + ")/@0x123\n";
+        String output = "Display 123 (physical)\n Composition Display State:\n"
+                + " layerFilter={layerStack=7 toInternalDisplay=true }\n"
+                + " - Output Layer 0x123(" + name + "#368)\n"
+                + " Region visibleRegion (this=0x1, count=1)\n";
+        for (String type : new String[]{"APPLICATION_ATTACHED_DIALOG", "PRESENTATION"}) {
+            String candidate = window.replace("ty=APPLICATION_ATTACHED_DIALOG", "ty=" + type);
+            check(ImeSurfaceState.visible(output, candidate, ime, 7),
+                    "composed owned floating keyboard remains supported: " + type);
+            for (String absent : new String[]{null, "", output.replace(name, "PanelActivity"),
+                    output.replace(name, name + "other"), output.replace("layerStack=7", "layerStack=0"),
+                    output.replace("count=1", "count=0"),
+                    output.replace(name + "#368", "Surface(name=" + name + ") - animation-leash#368"),
+                    "Offscreen Layers:\n" + name + "#368\nRegion visibleRegion (count=1)\n"}) {
+                check(!ImeSurfaceState.visible(absent, candidate, ime, 7),
+                        "WM visible floating window requires its own composed output: " + type);
+            }
+            for (String unrelated : new String[]{null, "", candidate.replace("package=keyboard", "package=other"),
+                    candidate.replace("mDisplayId=7", "mDisplayId=0"),
+                    candidate.replace("isVisible=true", "isVisible=false"),
+                    candidate.replace("Surface: shown=true", "Surface: shown=false"),
+                    candidate.replace("mDrawState=HAS_DRAWN", "mDrawState=NO_SURFACE"),
+                    candidate.replace("mSurface=", "unknownSurface="),
+                    candidate.replace(name, "PopupWindow:other")}) {
+                check(!ImeSurfaceState.visible(output, unrelated, ime, 7),
+                        "composed popup needs matching visible window ownership: " + type);
+            }
+        }
+        check(!ImeSurfaceState.visible(output, window.replace("u0 InputMethod}", "u0 Other}"), ime, 7),
+                "ordinary application popup cannot become keyboard evidence");
+        check(ImeSurfaceState.visible(output, window.replace("u0 InputMethod}", "u10 InputMethod}"), ime, 7),
+                "secondary-user IME attached windows retain composition proof");
+        String mainWindow = keyboardFrame("INPUT_METHOD", 7, "[0,0][1240,1080]")
+                + "    Requested w=1240 h=1080\n    mGivenContentInsets=[0,955][0,0]\n";
+        String mainOutput = output.replace(name, "InputMethod");
+        check(!ImeSurfaceState.visible(mainOutput, mainWindow + window, ime, 7),
+                "composed navigation strip cannot validate an uncomposed floating keyboard");
+        check(ImeSurfaceState.visible(mainOutput, mainWindow.replace("[0,955]", "[0,300]") + window, ime, 7),
+                "independently usable main keyboard can validate composition beside a stale popup");
+        check(ImeSurfaceState.visible(output.replace(name, "InputMethod"), null, ime, 7),
+                "standard IME composition keeps its existing independent proof");
+        String hidden = window.replace("isVisible=true", "isVisible=false");
+        String foreign = window.replace("package=keyboard", "package=other");
+        check(!ImeSurfaceState.visible(output, hidden + foreign, ime, 7),
+                "separate hidden and foreign windows cannot supply a floating surface");
+        check(!ImeSurfaceState.visible(output.replace("layerStack=7", "layerStack=0")
+                        + output.replace(name, "PanelActivity"), window, ime, 7),
+                "other display composition cannot complete the target display's output");
+    }
     private static String keyboardFrame(String type, int display, String bounds) {
         return "\n  Window #0 Window{keys u0 InputMethod}:\n"
             +"    mDisplayId="+display+" rootTaskId=1\n    package=keyboard appop=NONE\n"
@@ -449,5 +502,5 @@ public final class InteractionTest {
         check(!InputRoutePolicy.explicitExternalChoice(null, beta),
                 "unavailable input method is not a manual beta choice");
     }
-    public static void main(String[] args){padTests();modifierTests();imeWindowTests();imeHorizontalBoundsTests();imeConnectionTests();android16ImeTests();routeTests();dockVisibilityTests();setupTests();deviceIdentityTests();System.out.println("Passed "+checks+" interaction checks");}
+    public static void main(String[] args){padTests();modifierTests();imeWindowTests();imeFloatingCompositionTests();imeHorizontalBoundsTests();imeConnectionTests();android16ImeTests();routeTests();dockVisibilityTests();setupTests();deviceIdentityTests();System.out.println("Passed "+checks+" interaction checks");}
 }

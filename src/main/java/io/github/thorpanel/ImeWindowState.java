@@ -77,6 +77,34 @@ final class ImeWindowState {
     static boolean hasLowerFloatingKeys(String dump, String imeId, int displayId) {
         return hasLowerKeys(dump, imeId, displayId, false);
     }
+    static boolean hasLowerMainKeys(String dump, String imeId, int displayId) {
+        if (dump == null)
+            return false;
+        for (String window : dump.split("(?m)^\\s*Window #\\d+\\s+"))
+            if (window.contains("ty=INPUT_METHOD ")
+                    && hasLowerKeys(window, imeId, displayId, true))
+                return true;
+        return false;
+    }
+    /** Window ownership identifies candidates; only compositor output proves presentation. */
+    static java.util.Set<String> floatingSurfaceNames(String dump, String imeId, int displayId) {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        if (dump == null)
+            return names;
+        java.util.regex.Pattern surface = java.util.regex.Pattern.compile(
+                "\\bmSurface=Surface\\(name=([^\\r\\n]+)\\)/@\\S+");
+        for (String window : dump.split("(?m)^\\s*Window #\\d+\\s+")) {
+            if (!hasLowerFloatingKeys(window, imeId, displayId))
+                continue;
+            java.util.regex.Matcher match = surface.matcher(window);
+            if (match.find()) {
+                String name = match.group(1);
+                if (!match.find())
+                    names.add(name);
+            }
+        }
+        return names;
+    }
     private static boolean hasLowerKeys(
             String dump, String imeId, int displayId, boolean includeMainWindow) {
         if (dump == null || imeId == null || !imeId.contains("/") || displayId < 0)
@@ -92,8 +120,9 @@ final class ImeWindowState {
             if (window.contains("ty=PRESENTATION "))
                 return true;
             if (window.contains("ty=APPLICATION_ATTACHED_DIALOG ")
-                    && window.contains("mParentWindow=Window{")
-                    && window.contains(" u0 InputMethod}"))
+                    && java.util.regex.Pattern.compile(
+                            "\\bmParentWindow=Window\\{[^}\\r\\n]*\\su\\d+ InputMethod\\}")
+                                .matcher(window).find())
                 return true;
             if (!includeMainWindow || !window.contains("ty=INPUT_METHOD "))
                 continue;

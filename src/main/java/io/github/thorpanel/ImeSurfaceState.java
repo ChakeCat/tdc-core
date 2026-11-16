@@ -3,11 +3,24 @@
 package io.github.thorpanel;
 
 import java.util.regex.Pattern;
+import java.util.Set;
 
 /** Read composed output, not WM's cached visibility or off-screen layer records. */
 final class ImeSurfaceState {
     static boolean visible(String dump, int display) {
-        if (dump == null)
+        return visible(dump, display, java.util.Collections.emptySet(), true);
+    }
+    static boolean visible(String dump, String windows, String imeId, int display) {
+        // A floating keyboard can leave a composed navigation strip in the main IME window.
+        // That strip must not validate its uncomposed child keyboard.
+        boolean mainKeys = !ImeWindowState.hasLowerFloatingKeys(windows, imeId, display)
+                || ImeWindowState.hasLowerMainKeys(windows, imeId, display);
+        return visible(dump, display,
+                ImeWindowState.floatingSurfaceNames(windows, imeId, display), mainKeys);
+    }
+    private static boolean visible(
+            String dump, int display, Set<String> floatingNames, boolean mainKeys) {
+        if (dump == null || display < 0)
             return false;
         for (String output : dump.split("(?m)^Display ")) {
             if (!output.contains("Composition Display State:")
@@ -18,7 +31,15 @@ final class ImeSurfaceState {
                 if (end < 0)
                     continue;
                 String name = layer.substring(0, end);
-                if (!Pattern.compile("\\(InputMethod#\\d+\\)").matcher(name).find())
+                boolean keyboard = mainKeys
+                        && Pattern.compile("\\(InputMethod#\\d+\\)").matcher(name).find();
+                for (String floating : floatingNames)
+                    if (Pattern.compile("\\(" + Pattern.quote(floating) + "#\\d+\\)")
+                                    .matcher(name).find()) {
+                        keyboard = true;
+                        break;
+                    }
+                if (!keyboard)
                     continue;
                 if (Pattern.compile("Region visibleRegion[^\\n]*count=[1-9]\\d*\\)")
                                 .matcher(layer)
