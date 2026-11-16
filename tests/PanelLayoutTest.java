@@ -62,6 +62,9 @@ public final class PanelLayoutTest {
         for (PanelLayout.Rect mode : layout.modes)
             check(mode.height() >= PanelLayout.HEADER_TARGET - .01f, "mode tab height");
         for (PanelLayout.Key key : layout.keys) {
+            if ((key.code >= 29 && key.code <= 54) || (key.code >= 7 && key.code <= 16)
+                    || (key.code >= 68 && key.code <= 76) || key.code == 55 || key.code == 56)
+                near(key.bounds.height(), key.bounds.width(), "ordinary keys are square: " + key.label);
             if (layout.fullKeyboard) {
                 check(key.bounds.width() + .01f >= key.label.length() * layout.keyTextSp * layout.fontScale * .64f + 8,
                         "full keyboard label fits: " + key.label);
@@ -139,7 +142,7 @@ public final class PanelLayoutTest {
         check(layout(840,280,1,0,0,0).modes[0].top == layout(840,280,1,0,0,0).settings.top,
                 "wide short mode tabs share header row");
         PanelLayout giant = layout(1600,1400,1,1,0,0);
-        for (PanelLayout.Key key : giant.keys) check(key.bounds.height() <= 64.01f, "large screen key height cap");
+        for (PanelLayout.Key key : giant.keys) check(key.bounds.height() <= 80.01f, "large screen square key height stays bounded");
         float min = Float.MAX_VALUE, max = 0;
         for (PanelLayout.Key key : giant.keys) {
             min = Math.min(min, key.bounds.left);
@@ -163,8 +166,19 @@ public final class PanelLayoutTest {
         check(thor.keys.size() == expected.size(), "all keys visible at once on Thor");
         check(layout(thor.width, thor.height, 1, 0, 0, 0).option.isEmpty(),
                 "touchpad leaves the old corner toggle position empty");
-        check(thor.option.width() < 160 && thor.modes[0].width() == 96,
-                "Thor top controls use compact widths");
+        check(thor.option.width() < 160, "Thor option control uses a compact width");
+        near(thor.option.right + 6, thor.settings.left, "Thor option control is right-aligned");
+        near(thor.modes[0].left, 12, "Thor mode tabs start at the margin");
+        near(thor.modes[2].right, thor.width - 12, "Thor mode tabs fill the row");
+        for (int mode = 0; mode < 3; mode++) {
+            PanelLayout tabs = layout(thor.width, thor.height, 1, mode, 0, 0);
+            near(tabs.modes[2].right, thor.width - 12, "mode tabs fill the row in mode " + mode);
+            near(tabs.modes[0].width(), tabs.modes[2].width(), "mode tabs share one width");
+        }
+        for (int width : new int[]{320, 411}) {
+            PanelLayout narrowTabs = layout(width, 640, 1, 2, 0, 0);
+            near(narrowTabs.modes[2].right, width - 12, "narrow mode tabs fill the row at " + width);
+        }
         check(allKeys(thor.width, thor.height, 1).equals(expected), "Thor retains every key");
         PanelLayout thorLocal = PanelLayout.create(thor.width, thor.height, 1, 1, true, false, 0, 0);
         near(thorLocal.content.bottom, thor.content.bottom, "local keyboard uses measured host viewport");
@@ -173,20 +187,39 @@ public final class PanelLayoutTest {
         geometry(thorLocal);
         PanelLayout thorEditor = PanelLayout.create(thor.width, thor.height, 1, 2, false, false, 0, 0);
         PanelLayout thorIme = PanelLayout.create(thor.width, thor.height, 1, 2, false, true, 0, 0);
-        near(thorIme.pad.bottom, thorEditor.pad.bottom, "IME does not reserve an invented navigation strip");
-        check(thorIme.usable, "Thor input touchpad stays usable with IME");
+        geometry(thorEditor);
+        check(thorEditor.status.width() >= 120, "Thor status has room for ten short Chinese characters");
+        check(thorEditor.usable && !thorEditor.pad.isEmpty(), "Thor input page keeps the touchpad while the keyboard is closed");
+        near(thorEditor.imeButton.right + 6, thorEditor.option.left, "open icon sits left of the IME selector");
+        near(thorEditor.imeButton.width(), thorEditor.imeButton.height(), "keyboard toggle is a square icon");
+        near(thorEditor.imeButton.left, thorIme.imeButton.left, "keyboard icon stays in place when opened");
+        near(thorEditor.imeButton.top, thorIme.imeButton.top, "keyboard icon stays on its header row");
+        near(thorEditor.pad.top, thorEditor.content.top, "touchpad uses the area below the mode tabs");
+        check(thorIme.usable && thorIme.pad.isEmpty(), "open keyboard hides the Thor input touchpad");
+        near(thorIme.imeButton.right + 6, thorIme.option.left, "close-keyboard action sits beside the IME selector");
+        check(thorIme.imeButton.bottom <= thorIme.modes[0].top, "close-keyboard action shares the header row");
         geometry(thorIme);
         PanelLayout obscured = PanelLayout.create(thor.width, 152.5f, 1, 2, false, true, 0, 0);
         check(obscured.usable && obscured.pad.isEmpty() && !obscured.imeButton.isEmpty(),
-                "short IME viewport keeps keyboard action without an undersized touchpad");
+                "short IME viewport keeps keyboard action without a touchpad");
         geometry(obscured);
         for (PanelLayout.Rect mode : obscured.modes)
-            check(mode.bottom < obscured.imeButton.top && mode.bottom < obscured.height,
-                    "mode buttons stay above the keyboard action and real IME top");
-        PanelLayout veryShort = PanelLayout.create(thor.width, 120, 1, 2, false, true, 0, 0);
-        check(!veryShort.usable && veryShort.modes.length == 3,
-                "mode buttons remain available when the input area cannot fit");
-        geometry(veryShort);
+            check(mode.bottom < obscured.height, "mode buttons stay above the real IME top");
+        // Recorded Thor keyboard: about 303 px remain above the IME.
+        PanelLayout thorOpen = PanelLayout.create(thor.width, 303 / density, 1, 2, false, true, 0, 0);
+        check(thorOpen.usable && thorOpen.pad.isEmpty() && !thorOpen.imeButton.isEmpty(),
+                "Thor open keyboard keeps the close action without a pause message");
+        geometry(thorOpen);
+        PanelLayout opening = PanelLayout.create(thor.width, 303 / density, 1, 2, false, false, 0, 0);
+        check(opening.usable && opening.pad.isEmpty(), "keyboard animation never shows an undersized touchpad");
+        PanelLayout narrowIme = PanelLayout.create(400, 200, 1, 2, false, true, 0, 0);
+        check(narrowIme.usable && narrowIme.pad.isEmpty() && narrowIme.modes.length == 3,
+                "narrow open keyboard keeps the page usable without a touchpad");
+        geometry(narrowIme);
+        PanelLayout narrowClosed = PanelLayout.create(400, 200, 1, 2, false, false, 0, 0);
+        check(narrowClosed.usable && !narrowClosed.imeButton.isEmpty() && narrowClosed.modes.length == 3,
+                "narrow keyboard action remains available beside its selector");
+        geometry(narrowClosed);
         PanelLayout narrowPages = layout(320, 600, 1, 1, 0, 0);
         check(narrowPages.pageCount > 1 && narrowPages.pageBack.top > narrowPages.layerTabs[0].bottom,
                 "narrow navigation keeps its separate row");

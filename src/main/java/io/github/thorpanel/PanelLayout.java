@@ -15,7 +15,7 @@ final class PanelLayout {
     static final float MIN_TARGET = 48f;
     static final float HEADER_TARGET = 36f;
     static final float FULL_KEY_WIDTH = 28f;
-    static final float FULL_KEY_HEIGHT = 32f;
+    static final float FULL_KEY_HEIGHT = 28f;
     private static final float MARGIN = 12f;
     private static final float GAP = 6f;
     private static final float FULL_KEY_GAP = 4f;
@@ -124,7 +124,7 @@ final class PanelLayout {
     static PanelLayout create(float widthDp, float heightDp, float fontScale, int mode,
             boolean localKeyboard, boolean imeVisible, int layer, int page) {
         // The host supplies the viewport above the actual IME inset.
-        return new Builder(widthDp, heightDp, fontScale, layer).build(mode, page);
+        return new Builder(widthDp, heightDp, fontScale, layer).build(mode, page, imeVisible);
     }
 
     /** A stable geometry record for comparing a device's layout across changes. */
@@ -205,6 +205,11 @@ final class PanelLayout {
         return Float.isFinite(value) && value > 0 ? value : 0;
     }
 
+    private static boolean squareKey(int code) {
+        return (code >= 29 && code <= 54) || (code >= 7 && code <= 16)
+                || (code >= 68 && code <= 76) || code == 55 || code == 56;
+    }
+
     private static KeySpec k(int code, String label) {
         return k(code, label, 1);
     }
@@ -221,7 +226,7 @@ final class PanelLayout {
                     k(67, "⌫", 1.6f)},
             {k(61, "Tab", 1.5f), k(45, "Q"), k(51, "W"), k(33, "E"), k(46, "R"), k(48, "T"),
                     k(53, "Y"), k(49, "U"), k(37, "I"), k(43, "O"), k(44, "P"), k(71, "["),
-                    k(72, "]"), k(73, "\\", 1.1f)},
+                    k(72, "]"), k(73, "\\")},
             {k(115, "Caps", 1.6f), k(29, "A"), k(47, "S"), k(32, "D"), k(34, "F"), k(35, "G"),
                     k(36, "H"), k(38, "J"), k(39, "K"), k(40, "L"), k(74, ";"), k(75, "'"),
                     k(66, "Enter", 2)},
@@ -283,7 +288,7 @@ final class PanelLayout {
                                                     : Variant.STANDARD;
         }
 
-        PanelLayout build(int mode, int requestedPage) {
+        PanelLayout build(int mode, int requestedPage, boolean imeVisible) {
             float available = width - MARGIN * 2;
             float modeWidth = Math.max(headerTarget, 4 * 12f * fontScale + 16f);
             float iconWidth = Math.max(headerTarget, 2 * 14f * fontScale + 12f);
@@ -294,7 +299,8 @@ final class PanelLayout {
                     && available >= 104 + 3 * modeWidth + iconWidth * 2
                                     + Math.max(140, 8 * 14 * fontScale) + gap * 6;
             boolean joinedHeader = width >= 500
-                    && available >= 104 + iconWidth * 2 + Math.max(140, 8 * 14 * fontScale) + gap * 3;
+                    && available >= 104 + iconWidth * 2 + Math.max(140, 9 * 14 * fontScale + 16)
+                            + (mode == 2 ? headerTarget + gap : 0) + gap * 3;
             float headerHeight = compactHeader ? headerTarget
                     : joinedHeader ? headerTarget * 2 + gap
                     : headerTarget * (mode == 0 ? 2 : 3) + 20 * fontScale
@@ -310,8 +316,14 @@ final class PanelLayout {
                 modes = row(x, MARGIN, modeWidth * 3 + gap * 2, headerTarget, 3);
                 x = modes[2].right + gap;
                 float optionWidth = available - (x - MARGIN) - iconWidth * 2 - gap * 2;
-                if (mode != 0)
-                    option = new Rect(x, MARGIN, x + optionWidth, MARGIN + headerTarget);
+                if (mode != 0) {
+                    float optionLeft = x;
+                    if (mode == 2) {
+                        imeButton = new Rect(x, MARGIN, x + headerTarget, MARGIN + headerTarget);
+                        optionLeft = imeButton.right + gap;
+                    }
+                    option = new Rect(optionLeft, MARGIN, x + optionWidth, MARGIN + headerTarget);
+                }
                 settings = new Rect(x + optionWidth + gap, MARGIN,
                         x + optionWidth + gap + iconWidth, MARGIN + headerTarget);
                 exit = new Rect(settings.right + gap, MARGIN, width - MARGIN, MARGIN + headerTarget);
@@ -325,22 +337,32 @@ final class PanelLayout {
                 top = MARGIN + headerTarget + gap;
                 if (joinedHeader) {
                     status = new Rect(MARGIN, title.bottom, title.right, MARGIN + headerTarget);
+                    float right = settings.left - gap;
                     if (mode != 0) {
                         float optionWidth = Math.max(140, 9 * 14 * fontScale + 16);
-                        option = new Rect(title.right + gap, MARGIN,
-                                Math.min(settings.left - gap, title.right + gap + optionWidth),
-                                MARGIN + headerTarget);
+                        option = new Rect(Math.max(title.right + gap, right - optionWidth), MARGIN,
+                                right, MARGIN + headerTarget);
+                        right = option.left - gap;
                     }
+                    if (mode == 2 && right - headerTarget >= title.right + gap)
+                        imeButton = new Rect(right - headerTarget, MARGIN, right, MARGIN + headerTarget);
+                    float firstControl = !imeButton.isEmpty() ? imeButton.left
+                            : !option.isEmpty() ? option.left : settings.left;
+                    status = new Rect(MARGIN, title.bottom, firstControl - gap, MARGIN + headerTarget);
                 } else if (mode != 0) {
-                    option = new Rect(MARGIN, top, width - MARGIN, top + headerTarget);
+                    float optionLeft = MARGIN;
+                    if (mode == 2) {
+                        imeButton = new Rect(MARGIN, top, MARGIN + headerTarget, top + headerTarget);
+                        optionLeft = imeButton.right + gap;
+                    }
+                    option = new Rect(optionLeft, top, width - MARGIN, top + headerTarget);
                     top = option.bottom + gap;
                 }
                 if (!joinedHeader) {
                     status = new Rect(MARGIN, top, width - MARGIN, top + 20 * fontScale);
                     top = status.bottom + gap;
                 }
-                float modesWidth = Math.min(available, Math.max(96 * fontScale, modeWidth) * 3 + gap * 2);
-                modes = row(MARGIN, top, modesWidth, headerTarget, 3);
+                modes = row(MARGIN, top, available, headerTarget, 3);
                 top += headerTarget + gap;
             }
             float bottom = Math.max(MARGIN, height - MARGIN);
@@ -348,7 +370,7 @@ final class PanelLayout {
             if (mode == 1)
                 keyboard(requestedPage);
             else if (mode == 2)
-                editor();
+                editor(imeVisible);
             else
                 touchpad();
             return new PanelLayout(this);
@@ -366,15 +388,13 @@ final class PanelLayout {
             usable = true;
         }
 
-        void editor() {
-            if (content.width() < Math.max(headerTarget, 5 * 14 * fontScale + 24)
-                    || content.height() < headerTarget)
+        void editor(boolean imeVisible) {
+            float padTop = content.top;
+            if (imeButton.isEmpty())
                 return;
-            float buttonWidth = Math.min(content.width(), Math.max(112, 5 * 14 * fontScale + 24));
-            imeButton = new Rect(content.right - buttonWidth, content.top, content.right,
-                    content.top + headerTarget);
-            if (content.height() >= headerTarget + gap + 96)
-                pad = new Rect(content.left, imeButton.bottom + gap, content.right, content.bottom);
+            // The open keyboard owns text entry. The touchpad returns after it closes.
+            if (!imeVisible && content.bottom - padTop >= 96)
+                pad = new Rect(content.left, padTop, content.right, content.bottom);
             usable = true;
         }
 
@@ -385,7 +405,7 @@ final class PanelLayout {
         float fullWidth() {
             float required = 0;
             for (KeySpec[] row : FULL) {
-                float unit = FULL_KEY_WIDTH;
+                float unit = Math.max(FULL_KEY_WIDTH, keyTextSp * fontScale * 1.4f + 12);
                 float weights = 0;
                 for (KeySpec key : row) {
                     float label = key.label.length() * keyTextSp * fontScale * .64f + 8;
@@ -401,27 +421,29 @@ final class PanelLayout {
             if (width < 700)
                 keyTextSp = 12f;
             float keyboardWidth = Math.min(content.width(), Math.max(1000f, fullWidth()));
-            float fullHeight = Math.max(FULL_KEY_HEIGHT, keyTextSp * fontScale * 1.4f + 12);
-            if (width >= 500 && keyboardWidth >= fullWidth()
-                    && content.height() >= fullHeight * FULL.length + FULL_KEY_GAP * (FULL.length - 1)) {
+            float[] rowHeights = new float[FULL.length];
+            float fullHeight = FULL_KEY_GAP * (FULL.length - 1);
+            for (int r = 0; r < FULL.length; r++) {
+                float weights = 0;
+                for (KeySpec key : FULL[r])
+                    weights += key.weight;
+                rowHeights[r] = (keyboardWidth - FULL_KEY_GAP * (FULL[r].length - 1)) / weights;
+                fullHeight += rowHeights[r];
+            }
+            if (width >= 500 && keyboardWidth >= fullWidth() && content.height() >= fullHeight) {
                 fullKeyboard = true;
-                float keyHeight = Math.min(Math.max(fullHeight, 64f),
-                        (content.height() - FULL_KEY_GAP * (FULL.length - 1)) / FULL.length);
                 float left = content.centerX() - keyboardWidth / 2;
+                float y = content.top;
                 for (int r = 0; r < FULL.length; r++) {
                     KeySpec[] row = FULL[r];
-                    float weights = 0;
-                    for (KeySpec key : row)
-                        weights += key.weight;
-                    float unit = (keyboardWidth - FULL_KEY_GAP * (row.length - 1)) / weights;
+                    float unit = rowHeights[r];
                     float x = left;
                     for (KeySpec key : row) {
                         keys.add(new Key(key.code, key.label,
-                                new Rect(x, content.top + r * (keyHeight + FULL_KEY_GAP),
-                                        x + unit * key.weight,
-                                        content.top + r * (keyHeight + FULL_KEY_GAP) + keyHeight)));
+                                new Rect(x, y, x + unit * key.weight, y + unit)));
                         x += unit * key.weight + FULL_KEY_GAP;
                     }
+                    y += unit + FULL_KEY_GAP;
                 }
                 usable = true;
                 return;
@@ -486,6 +508,10 @@ final class PanelLayout {
                 float keyWidth = (content.width() - gap * (columns - 1)) / columns;
                 float x = content.left + (index % columns) * (keyWidth + gap);
                 float keyY = y + (index / columns) * (target + gap);
+                if (squareKey(values[i].code)) {
+                    x += (keyWidth - target) / 2;
+                    keyWidth = target;
+                }
                 keys.add(new Key(values[i].code, values[i].label,
                         new Rect(x, keyY, x + keyWidth, keyY + target)));
             }
