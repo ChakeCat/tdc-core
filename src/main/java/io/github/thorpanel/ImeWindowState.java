@@ -96,10 +96,12 @@ final class ImeWindowState {
         for (String window : dump.split("(?m)^\\s*Window #\\d+\\s+")) {
             if (!hasLowerFloatingKeys(window, imeId, displayId))
                 continue;
+            // A floating window may also list an animation leash. Keep content
+            // surface names only; SurfaceFlinger still has to compose one of them.
             java.util.regex.Matcher match = surface.matcher(window);
-            if (match.find()) {
+            while (match.find()) {
                 String name = match.group(1);
-                if (!match.find())
+                if (!name.contains("animation-leash"))
                     names.add(name);
             }
         }
