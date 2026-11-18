@@ -1,5 +1,5 @@
 // Copyright 2026 雷神的锤 contributors
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: MIT
 package io.github.thorpanel;
 
 import java.io.IOException;
